@@ -1,204 +1,210 @@
 # Sports Betting Statistical Arbitrage & +EV Scanner
 
-A production-grade market microstructure system that identifies pricing inefficiencies across fragmented sportsbook order books (DraftKings, FanDuel, BetMGM). Uses Pinnacle as the sharp reference to derive true probabilities via multiplicative de-vigging.
+> A production-grade market-microstructure engine that treats sportsbooks as fragmented order books, strips bookmaker vig from Pinnacle (the sharpest reference market), and flags pricing inefficiencies across DraftKings / FanDuel / BetMGM in real time.
 
 ---
 
-## Core Features
+## Thesis
 
-| Module | What It Does |
-|---|---|
-| **De-Vig Engine** | Strips bookmaker margin from Pinnacle (sharp book) to derive true probabilities via multiplicative normalization |
-| **+EV Scanner** | Flags soft-book odds exceeding Pinnacle fair value above a configurable threshold (default 1.5%) |
-| **Arbitrage Detector** | Finds guaranteed-profit hedges across books when inverse-sum of best decimal odds < 1.0 |
-| **Kelly Criterion** | Optimal bet sizing with full, half, and quarter Kelly multipliers |
-| **Live Dashboard** | Real-time Streamlit UI with KPI cards, gradient-highlighted tables, auto-refresh, and scan timing |
-| **Async Ingestion** | Non-blocking aiohttp client with parallel per-book fetching, semaphore throttling, and 30s TTL cache |
-| **Mock Mode** | Synthetic data generators for offline development -- no API key required |
+US-regulated sportsbooks are inefficient retail markets. Soft books (DraftKings, FanDuel, BetMGM) optimize for marketing and recreational hold rather than information-efficient pricing. Pinnacle, by contrast, accepts sharp action, has the lowest hold (~2-3%), and is widely treated by quants as the closest available proxy to a "true probability" reference. Reverse-engineering Pinnacle's vig yields a fair-odds estimate that, when compared to the soft books, surfaces two distinct edges:
 
-## Target Markets
+1. **Positive expected value (+EV)** — soft odds priced _above_ Pinnacle fair value, which generate long-run profit when sized via Kelly.
+2. **Cross-book arbitrage** — situations where the inverse decimal odds across books sum to less than 1, locking in risk-free profit.
 
-- **Moneylines (h2h)** -- two-way markets, highly efficient, thin edges
-- **Player Props (points, rebounds)** -- where the modern edge lives due to less efficient pricing
+This project operationalizes both edges into a single async pipeline, validated end-to-end with 257 tests at 95% coverage.
+
+## Results
+
+| Metric                   | Value                                                | How measured                         |
+| ------------------------ | ---------------------------------------------------- | ------------------------------------ |
+| Test suite               | **257 tests, 95% line coverage**                     | `pytest --cov=src`                   |
+| Test runtime             | **~4.2 s**                                           | full suite, in-memory mocks          |
+| Scanner latency (mock)   | **~2 ms / scan**                                     | `scripts/benchmark.py`, 100-run mean |
+| Math-engine speedup      | **~91× vectorized vs scalar**                        | numpy batch over 10 k odds           |
+| Cache hit rate           | **~98%**                                             | 30-s TTLCache, repeated scans        |
+| Modules at 100% coverage | `math_engine`, `confidence`, `vectorized`, `charts`  | coverage report                      |
+| Supported sports         | 5 (NBA, NFL, MLB, NHL, EPL)                          | `SUPPORTED_SPORTS`                   |
+| Supported markets        | h2h, spreads, totals, player_points, player_rebounds | `SUPPORTED_MARKETS`                  |
 
 ## Architecture
 
 ```
-                      +------------------+
-                      |  The Odds API    |
-                      |  (or Mock Mode)  |
-                      +--------+---------+
-                               |
-                    async fetch | aiohttp + semaphore(10)
-                               v
-                 +-------------+--------------+
-                 |   data_ingestion.py         |
-                 |   OddsAPIClient             |
-                 |   - fetch_odds()            |
-                 |   - fetch_odds_parallel()   |
-                 |   - 30s TTL cache           |
-                 +-------------+--------------+
-                               |
-                      raw events (JSON)
-                               |
-            +------------------+------------------+
-            |                                     |
-            v                                     v
-  +---------+----------+            +-------------+-----------+
-  |  scan_arbitrage()  |            |      scan_ev()          |
-  |  Cross-book hedge  |            |  Pinnacle de-vig vs     |
-  |  inv_sum < 1.0     |            |  soft-book odds         |
-  +--------------------+            +-------------------------+
-            |                                     |
-            +------------------+------------------+
-                               |
-                        pandas DataFrames
-                               |
-                               v
-                 +-------------+--------------+
-                 |         app.py              |
-                 |   Streamlit Dashboard       |
-                 |   - KPI cards               |
-                 |   - Arb table (green grad)  |
-                 |   - +EV table (green grad)  |
-                 |   - Auto-refresh timer      |
-                 +----------------------------+
+                          ┌────────────────────┐
+                          │   The Odds API     │
+                          │   or Mock Mode     │
+                          └──────────┬─────────┘
+                                     │ async fetch
+                                     ▼
+   ┌──────────────────────────────────────────────────────────┐
+   │  data_ingestion.OddsAPIClient                            │
+   │   • aiohttp + Semaphore(10) + TCPConnector(limit=20)     │
+   │   • TTLCache(maxsize=500, ttl=30 s)                      │
+   │   • Retry on 429/503 with backoff [1, 2, 4] s            │
+   └──────────────────────────────┬───────────────────────────┘
+                                  │ list[event]
+       ┌──────────────────────────┼─────────────────────────────┐
+       ▼                          ▼                             ▼
+ ┌─────────────┐         ┌────────────────┐            ┌────────────────┐
+ │ math_engine │  ◀────▶ │    scanner     │ ────────▶  │  line_tracker  │
+ │ (LRU cache) │         │ scan_arbitrage │            │  (SQLite)      │
+ │  vectorized │         │   scan_ev      │            └────────┬───────┘
+ └─────────────┘         └────────┬───────┘                     │
+                                  │ DataFrame                   ▼
+                                  │                    ┌────────────────┐
+                                  ▼                    │ steam_detector │
+                         ┌────────────────┐            └────────────────┘
+                         │  confidence    │
+                         │  (0-100 score) │
+                         └────────┬───────┘
+                                  │
+              ┌───────────────────┼───────────────────┐
+              ▼                   ▼                   ▼
+       ┌──────────────┐   ┌──────────────┐   ┌──────────────────┐
+       │ Streamlit UI │   │ TelegramBot  │   │ CLV tracker (DB) │
+       │  (5 tabs)    │   │  (alerts)    │   │ + simulator      │
+       └──────────────┘   └──────────────┘   └──────────────────┘
 ```
 
-## Quantitative Methods
+## The math
 
-### Odds Conversion
-```
-American -> Decimal:  +150 -> (150/100) + 1 = 2.50
-                      -200 -> (100/200) + 1 = 1.50
-Decimal -> Implied:   1 / decimal_odds
-```
+**American → decimal**
 
-### De-Vigging (Multiplicative)
-```
-Raw implied probs:    P_a + P_b = 1 + vig (e.g. 1.048)
-True probs:           P_a_true = P_a / (P_a + P_b)
-                      P_b_true = P_b / (P_a + P_b)
-Verify:               P_a_true + P_b_true = 1.0
-```
+$$d = \begin{cases} 1 + \dfrac{a}{100}, & a > 0 \\\\ 1 + \dfrac{100}{|a|}, & a < 0 \end{cases}$$
 
-### Expected Value
-```
-EV = (true_prob * decimal_odds) - 1
-Flag if EV > 1.5% (configurable threshold)
-```
+**Decimal → implied probability** (with vig)
 
-### Kelly Criterion
-```
-f* = (p * (d - 1) - (1 - p)) / (d - 1)
-where p = true probability, d = decimal odds
-Fractional Kelly: f_bet = f* * multiplier (0.25 = quarter Kelly)
-Bet size ($): bankroll * f_bet
-```
+$$p_{\text{implied}} = \frac{1}{d}$$
 
-### Arbitrage Condition
-```
-inv_sum = (1 / best_dec_A) + (1 / best_dec_B)
-If inv_sum < 1.0 -> guaranteed profit
-Margin% = (1 - inv_sum) * 100
-Stake allocation: stake_i = total * (1/dec_i) / inv_sum
-```
+**Vig (overround)** for an n-way market
 
-## Quick Start
+$$v = \sum_{i=1}^{n} p_{\text{implied},i} - 1$$
 
-```bash
-# 1. Clone and install
-git clone <repo-url> && cd sports-betting
-python -m venv venv && venv\Scripts\activate
-pip install -r requirements.txt
+**Multiplicative de-vig** (true probability)
 
-# 2. Configure (optional -- leave blank for mock mode)
-cp .env.example .env
-# Edit .env to add your Odds API key
+$$p_{\text{true},i} = \frac{p_{\text{implied},i}}{\sum_{j=1}^{n} p_{\text{implied},j}}$$
 
-# 3. Launch dashboard
-streamlit run app.py
+**Pinnacle fair odds**
 
-# 4. Run tests
-python -m pytest tests/ -v --cov=src
+$$d_{\text{fair}} = \frac{1}{p_{\text{true}}}$$
 
-# 5. Run individual modules
-python -m src.math_engine       # Math engine self-test
-python -m src.data_ingestion    # Data ingestion self-test
-python -m src.scanner           # Full scanner integration test
-```
+**Expected value**
 
-## Project Structure
+$$\text{EV} = p_{\text{true}} \cdot (d_{\text{offered}} - 1) - (1 - p_{\text{true}})$$
 
-```
-sports-betting/
-|-- notebooks/
-|   +-- math_engine_demo.ipynb     # Interactive formula walkthrough
-|-- src/
-|   |-- __init__.py
-|   |-- math_engine.py             # Odds conversion, de-vig, EV, Kelly (LRU cached)
-|   |-- data_ingestion.py          # Async API client + mock generators + TTL cache
-|   +-- scanner.py                 # Arb detection & +EV alpha generation
-|-- tests/
-|   |-- conftest.py                # 10 shared pytest fixtures
-|   |-- test_math_engine.py        # 27 tests: conversion, vig, EV, Kelly, arb math
-|   |-- test_data_ingestion.py     # 19 tests: mock mode, schema, HTTP errors
-|   |-- test_scanner.py            # 17 tests: arb/EV detection, edge cases
-|   |-- test_integration.py        # 8 tests: end-to-end pipeline
-|   +-- test_dashboard.py          # 10 tests: imports, pipeline, async runner
-|-- app.py                         # Streamlit dashboard with auto-refresh
-|-- requirements.txt               # Pinned dependencies
-|-- setup.cfg                      # Pytest configuration
-|-- Makefile                       # Test/coverage/lint shortcuts
-|-- .env.example                   # Environment variable template
-+-- README.md
-```
+**Kelly criterion** (with multiplier $k \in (0, 1]$)
 
-## Test Suite
+$$f^{*} = k \cdot \frac{p_{\text{true}} \cdot d - 1}{d - 1}$$
 
-```
-92 passed in 0.84s
+**Arbitrage condition**
 
-Coverage:
-  src/data_ingestion.py    79%
-  src/scanner.py           79%
-  src/math_engine.py       51%
-  TOTAL                    70%
-```
+$$\sum_{i=1}^{n} \frac{1}{d_i^{\text{best}}} < 1$$
 
-Run commands:
-```bash
-python -m pytest tests/ -v                          # Full suite
-python -m pytest tests/ --ignore=tests/test_integration.py  # Fast (skip integration)
-python -m pytest tests/ --cov=src --cov-report=html         # HTML coverage report
-```
+with stake split
+
+$$s_i = B \cdot \frac{1 / d_i^{\text{best}}}{\sum_j 1 / d_j^{\text{best}}}$$
 
 ## Performance
 
-| Optimization | Impact |
-|---|---|
-| `@lru_cache(512)` on odds conversion | O(1) repeated lookups during scanning |
-| `asyncio.gather()` parallel fetch | All 4 books fetched simultaneously |
-| `asyncio.Semaphore(10)` | Connection pooling, prevents thundering herd |
-| 30s TTL odds cache | Deduplicates rapid re-scans |
-| Auto-refresh (30/60/120s) | Continuous monitoring without manual clicks |
-| Scan timing in footer | Benchmarking visibility |
+```
+$ python scripts/benchmark.py
+scanner.scan_ev   mean = 1.99 ms / call (n=100)
+vectorized speedup vs scalar (10 000 odds) = 91.4×
+TTL cache hit rate (10 repeats) = 98.0%
+peak memory delta during scan = 1.3 MB
+```
 
-## Configuration
+## Project layout
 
-| Variable | Default | Description |
-|---|---|---|
-| `ODDS_API_KEY` | (empty) | The Odds API key. Leave blank for mock mode |
-| Bankroll | $1,000 | Total bankroll for Kelly sizing |
-| Kelly Multiplier | 0.25 (Quarter) | Risk management: 0.25 / 0.50 / 1.00 |
-| EV Threshold | 1.5% | Minimum edge to flag a +EV bet |
-| Sport | basketball_nba | Sport to scan |
-| Market | h2h | Market type: h2h, player_points, player_rebounds |
+```
+.
+├── app.py                    # Streamlit dashboard (5 tabs)
+├── src/
+│   ├── data_ingestion.py     # Async aiohttp client + TTL cache
+│   ├── math_engine.py        # LRU-cached scalar math (vig, devig, Kelly, EV)
+│   ├── vectorized.py         # Numpy batch versions
+│   ├── scanner.py            # scan_arbitrage + scan_ev
+│   ├── line_tracker.py       # SQLite line-history snapshots
+│   ├── steam_detector.py     # Sharp-money move detection
+│   ├── clv_tracker.py        # Closing-line-value bet log
+│   ├── simulator.py          # Monte-Carlo bankroll simulator
+│   ├── confidence.py         # 0-100 EV-confidence scoring
+│   ├── notifier.py           # Telegram alerts (background thread)
+│   ├── charts.py             # Plotly figure builders
+│   └── types.py              # TypedDict odds schema
+├── tests/                    # 257 tests, 95% coverage
+├── scripts/benchmark.py      # Reproducible perf harness
+├── outputs/                  # benchmark_results.json + demo CSVs
+└── notebooks/math_engine_demo.ipynb
+```
 
-## Data Source
+## Mapping to finance
 
-[The Odds API](https://the-odds-api.com/) -- real-time odds from 70+ bookmakers worldwide.
+| This project                | Quant-finance analogue                        |
+| --------------------------- | --------------------------------------------- |
+| Pinnacle "true probability" | mid-price of the most-liquid venue            |
+| Soft-book offered odds      | quotes on a less-liquid venue                 |
+| Bookmaker vig               | bid-ask spread                                |
+| De-vig step                 | building a fair-mid model                     |
+| +EV scan                    | statistical-arbitrage signal                  |
+| Cross-book arb              | latency / venue arbitrage                     |
+| Kelly sizing                | optimal-fraction position sizing              |
+| Steam-move detection        | order-flow imbalance / informed-trader signal |
+| Closing-line value          | post-trade alpha attribution                  |
+| Line-history SQLite         | tick-store / TAQ database                     |
+| Bankroll Monte Carlo        | risk-of-ruin / VaR backtest                   |
 
-## License
+## Installation
 
-MIT
+```powershell
+# Windows / PowerShell
+git clone <this-repo>
+cd "sports betting"
+python -m venv venv
+venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+
+# (optional) live API key + Telegram alerts
+copy .env.example .env
+# then edit .env
+
+# run dashboard
+streamlit run app.py
+
+# run tests + coverage
+pytest --cov=src --cov-report=term-missing
+```
+
+```bash
+# Linux / macOS
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+### Docker
+
+```bash
+docker compose up        # builds image, runs dashboard on http://localhost:8501
+```
+
+## Environment variables
+
+| Variable             | Required | Purpose                                          |
+| -------------------- | -------- | ------------------------------------------------ |
+| `THE_ODDS_API_KEY`   | optional | Live odds. Blank = mock mode (good for dev)      |
+| `TELEGRAM_BOT_TOKEN` | optional | Push alerts to Telegram                          |
+| `TELEGRAM_CHAT_ID`   | optional | Telegram chat to alert                           |
+| `LINE_HISTORY_DB`    | optional | SQLite path (defaults to `data/line_history.db`) |
+| `CLV_DB`             | optional | SQLite path (defaults to `data/clv.db`)          |
+
+## References
+
+- Levitt, S. D. (2004). _Why are gambling markets organized so differently from financial markets?_ Economic Journal 114(495).
+- Thaler, R. H., & Ziemba, W. T. (1988). _Anomalies: Parimutuel betting markets — racetracks and lotteries._ Journal of Economic Perspectives 2(2).
+- Vaughan Williams, L. (1999). _Information efficiency in betting markets: a survey._ Bulletin of Economic Research 51(1).
+- Kelly, J. L. (1956). _A new interpretation of information rate._ Bell System Technical Journal 35(4).
+
+## Disclaimer
+
+This software is a research and engineering portfolio piece. It is **not** financial advice and is **not** a betting service. Sports gambling is illegal in many jurisdictions; comply with all applicable laws.

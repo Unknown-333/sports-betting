@@ -7,12 +7,11 @@ false positive prevention, and edge cases.
 
 from __future__ import annotations
 
-import pytest
 import pandas as pd
+import pytest
 
 from src.math_engine import MathEngine
-from src.scanner import Scanner, EV_THRESHOLD, SHARP_BOOK, SOFT_BOOKS
-
+from src.scanner import EV_THRESHOLD, SHARP_BOOK, SOFT_BOOKS, Scanner
 
 # ══════════════════════════════════════════════
 #  Helper: build a minimal event for testing
@@ -33,17 +32,21 @@ def _make_event(
     """
     bookmakers = []
     for bk_key, (home_odds, away_odds) in books.items():
-        bookmakers.append({
-            "key": bk_key,
-            "title": bk_key.title(),
-            "markets": [{
-                "key": market,
-                "outcomes": [
-                    {"name": home, "price": home_odds},
-                    {"name": away, "price": away_odds},
+        bookmakers.append(
+            {
+                "key": bk_key,
+                "title": bk_key.title(),
+                "markets": [
+                    {
+                        "key": market,
+                        "outcomes": [
+                            {"name": home, "price": home_odds},
+                            {"name": away, "price": away_odds},
+                        ],
+                    }
                 ],
-            }],
-        })
+            }
+        )
     return {
         "id": f"test_{home}_{away}",
         "sport_key": "basketball_nba",
@@ -65,10 +68,11 @@ class TestArbDetection:
     def test_arb_detected_with_wide_spread(self):
         """Known arb scenario: best odds sum inverse < 1.0."""
         event = _make_event(
-            "Team A", "Team B",
+            "Team A",
+            "Team B",
             {
                 "draftkings": (+140, -200),  # DK has Team A at +140
-                "fanduel": (-180, +120),      # FD has Team B at +120
+                "fanduel": (-180, +120),  # FD has Team B at +120
                 "pinnacle": (-150, +130),
             },
         )
@@ -80,7 +84,8 @@ class TestArbDetection:
     def test_no_arb_in_tight_market(self):
         """No arb when all books are efficient (-110/-110)."""
         event = _make_event(
-            "Team A", "Team B",
+            "Team A",
+            "Team B",
             {
                 "draftkings": (-110, -110),
                 "fanduel": (-110, -110),
@@ -97,7 +102,8 @@ class TestArbDetection:
         # +200 (3.00) and +200 (3.00) → inv_sum = 0.333 + 0.333 = 0.667
         # Margin = (1 - 0.667) * 100 = 33.33%
         event = _make_event(
-            "Team A", "Team B",
+            "Team A",
+            "Team B",
             {
                 "draftkings": (+200, -300),
                 "fanduel": (-300, +200),
@@ -113,7 +119,8 @@ class TestArbDetection:
     def test_arb_has_stake_columns(self):
         """Arb results must include hedge stake allocations."""
         event = _make_event(
-            "Team A", "Team B",
+            "Team A",
+            "Team B",
             {
                 "draftkings": (+140, -200),
                 "fanduel": (-180, +120),
@@ -143,10 +150,11 @@ class TestEVDetection:
     def test_ev_detected_when_soft_exceeds_fair(self):
         """Soft book offering better odds than Pinnacle fair value → +EV."""
         event = _make_event(
-            "Team A", "Team B",
+            "Team A",
+            "Team B",
             {
                 "pinnacle": (-155, +135),
-                "draftkings": (-130, +155),   # DK offering +155 vs Pinnacle +135
+                "draftkings": (-130, +155),  # DK offering +155 vs Pinnacle +135
             },
         )
         scanner = Scanner()
@@ -162,10 +170,11 @@ class TestEVDetection:
     def test_ev_threshold_filtering(self):
         """Only bets above the EV threshold should be flagged."""
         event = _make_event(
-            "Team A", "Team B",
+            "Team A",
+            "Team B",
             {
                 "pinnacle": (-150, +130),
-                "draftkings": (-148, +132),   # Very slight edge
+                "draftkings": (-148, +132),  # Very slight edge
             },
         )
         scanner = Scanner()
@@ -176,7 +185,8 @@ class TestEVDetection:
     def test_ev_output_schema(self):
         """Every +EV opportunity must have all required columns."""
         event = _make_event(
-            "Team A", "Team B",
+            "Team A",
+            "Team B",
             {
                 "pinnacle": (-155, +135),
                 "draftkings": (-120, +165),
@@ -185,11 +195,18 @@ class TestEVDetection:
         scanner = Scanner()
         df = scanner.scan_ev([event])
         if not df.empty:
-            required = {"Matchup", "Outcome", "Bookmaker", "Offered_Odds",
-                        "Pinnacle_Fair", "EV_%", "Kelly_Bet"}
-            assert required.issubset(set(df.columns)), (
-                f"Missing columns: {required - set(df.columns)}"
-            )
+            required = {
+                "Matchup",
+                "Outcome",
+                "Bookmaker",
+                "Offered_Odds",
+                "Pinnacle_Fair",
+                "EV_%",
+                "Kelly_Bet",
+            }
+            assert required.issubset(
+                set(df.columns)
+            ), f"Missing columns: {required - set(df.columns)}"
 
     def test_ev_from_fixture(self, sample_ev_opportunity):
         """+EV detected using the conftest fixture."""
@@ -217,7 +234,8 @@ class TestScannerConfig:
     def test_kelly_multiplier_applied(self):
         """Kelly sizing uses configured multiplier."""
         event = _make_event(
-            "Team A", "Team B",
+            "Team A",
+            "Team B",
             {
                 "pinnacle": (-155, +135),
                 "draftkings": (-120, +180),
@@ -247,7 +265,8 @@ class TestEdgeCases:
     def test_no_pinnacle_skips_ev(self):
         """If Pinnacle is missing from event, skip EV scan (no reference)."""
         event = _make_event(
-            "Team A", "Team B",
+            "Team A",
+            "Team B",
             {
                 "draftkings": (-150, +130),
                 "fanduel": (-155, +135),

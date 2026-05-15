@@ -14,11 +14,10 @@ import pytest
 from src.data_ingestion import (
     BASE_URL,
     BOOKMAKERS,
-    OddsAPIClient,
     SUPPORTED_MARKETS,
     SUPPORTED_SPORTS,
+    OddsAPIClient,
 )
-
 
 # ══════════════════════════════════════════════
 #  1. Mock Mode Tests
@@ -72,12 +71,18 @@ class TestSchemaValidation:
         """Every mock event must have: id, sport_key, home_team, away_team, bookmakers."""
         client = OddsAPIClient(api_key="")
         events = await client.fetch_odds("basketball_nba", "h2h")
-        required_fields = {"id", "sport_key", "commence_time",
-                           "home_team", "away_team", "bookmakers"}
+        required_fields = {
+            "id",
+            "sport_key",
+            "commence_time",
+            "home_team",
+            "away_team",
+            "bookmakers",
+        }
         for event in events:
-            assert required_fields.issubset(event.keys()), (
-                f"Missing fields in event: {required_fields - event.keys()}"
-            )
+            assert required_fields.issubset(
+                event.keys()
+            ), f"Missing fields in event: {required_fields - event.keys()}"
 
     @pytest.mark.asyncio
     async def test_mock_bookmaker_has_required_fields(self):
@@ -112,9 +117,7 @@ class TestSchemaValidation:
             for bk in event["bookmakers"]:
                 for mkt in bk["markets"]:
                     for outcome in mkt["outcomes"]:
-                        assert "point" in outcome, (
-                            f"Prop outcome missing 'point': {outcome}"
-                        )
+                        assert "point" in outcome, f"Prop outcome missing 'point': {outcome}"
 
     @pytest.mark.asyncio
     async def test_mock_all_bookmakers_present(self):
@@ -124,9 +127,7 @@ class TestSchemaValidation:
         for event in events:
             bk_keys = {bk["key"] for bk in event["bookmakers"]}
             for required_bk in BOOKMAKERS:
-                assert required_bk in bk_keys, (
-                    f"Bookmaker {required_bk} missing from event"
-                )
+                assert required_bk in bk_keys, f"Bookmaker {required_bk} missing from event"
 
 
 # ══════════════════════════════════════════════
@@ -180,17 +181,27 @@ class TestErrorHandling:
     async def test_api_200_parses_json(self):
         """Successful 200 response parses JSON payload."""
         import re
+
         from aioresponses import aioresponses
 
         client = OddsAPIClient(api_key="valid_key")
         pattern = re.compile(r"^https://api\.the-odds-api\.com/v4/sports/.+/odds.*$")
-        mock_payload = [{"id": "test", "sport_key": "basketball_nba",
-                         "home_team": "A", "away_team": "B", "bookmakers": []}]
+        mock_payload = [
+            {
+                "id": "test",
+                "sport_key": "basketball_nba",
+                "home_team": "A",
+                "away_team": "B",
+                "bookmakers": [],
+            }
+        ]
 
         with aioresponses() as mocked:
-            mocked.get(pattern, payload=mock_payload,
-                       headers={"x-requests-remaining": "99",
-                                "x-requests-used": "1"})
+            mocked.get(
+                pattern,
+                payload=mock_payload,
+                headers={"x-requests-remaining": "99", "x-requests-used": "1"},
+            )
             result = await client._fetch_live("basketball_nba", "h2h")
             assert len(result) == 1
             assert result[0]["id"] == "test"

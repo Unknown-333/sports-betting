@@ -11,10 +11,10 @@ import pytest
 
 from src.math_engine import MathEngine
 
-
 # ──────────────────────────────────────────────
 #  Math Engine Instance
 # ──────────────────────────────────────────────
+
 
 @pytest.fixture
 def math():
@@ -25,6 +25,7 @@ def math():
 # ──────────────────────────────────────────────
 #  Moneyline Fixtures
 # ──────────────────────────────────────────────
+
 
 @pytest.fixture
 def sample_moneyline_odds():
@@ -43,46 +44,54 @@ def sample_moneyline_odds():
             {
                 "key": "pinnacle",
                 "title": "Pinnacle",
-                "markets": [{
-                    "key": "h2h",
-                    "outcomes": [
-                        {"name": "Los Angeles Lakers", "price": -155},
-                        {"name": "Boston Celtics", "price": +135},
-                    ],
-                }],
+                "markets": [
+                    {
+                        "key": "h2h",
+                        "outcomes": [
+                            {"name": "Los Angeles Lakers", "price": -155},
+                            {"name": "Boston Celtics", "price": +135},
+                        ],
+                    }
+                ],
             },
             {
                 "key": "draftkings",
                 "title": "DraftKings",
-                "markets": [{
-                    "key": "h2h",
-                    "outcomes": [
-                        {"name": "Los Angeles Lakers", "price": -150},
-                        {"name": "Boston Celtics", "price": +145},
-                    ],
-                }],
+                "markets": [
+                    {
+                        "key": "h2h",
+                        "outcomes": [
+                            {"name": "Los Angeles Lakers", "price": -150},
+                            {"name": "Boston Celtics", "price": +145},
+                        ],
+                    }
+                ],
             },
             {
                 "key": "fanduel",
                 "title": "FanDuel",
-                "markets": [{
-                    "key": "h2h",
-                    "outcomes": [
-                        {"name": "Los Angeles Lakers", "price": -160},
-                        {"name": "Boston Celtics", "price": +150},
-                    ],
-                }],
+                "markets": [
+                    {
+                        "key": "h2h",
+                        "outcomes": [
+                            {"name": "Los Angeles Lakers", "price": -160},
+                            {"name": "Boston Celtics", "price": +150},
+                        ],
+                    }
+                ],
             },
             {
                 "key": "betmgm",
                 "title": "BetMGM",
-                "markets": [{
-                    "key": "h2h",
-                    "outcomes": [
-                        {"name": "Los Angeles Lakers", "price": -145},
-                        {"name": "Boston Celtics", "price": +130},
-                    ],
-                }],
+                "markets": [
+                    {
+                        "key": "h2h",
+                        "outcomes": [
+                            {"name": "Los Angeles Lakers", "price": -145},
+                            {"name": "Boston Celtics", "price": +130},
+                        ],
+                    }
+                ],
             },
         ],
     }
@@ -94,19 +103,22 @@ def sample_pinnacle_odds():
     return {
         "key": "pinnacle",
         "title": "Pinnacle",
-        "markets": [{
-            "key": "h2h",
-            "outcomes": [
-                {"name": "Los Angeles Lakers", "price": -155},
-                {"name": "Boston Celtics", "price": +135},
-            ],
-        }],
+        "markets": [
+            {
+                "key": "h2h",
+                "outcomes": [
+                    {"name": "Los Angeles Lakers", "price": -155},
+                    {"name": "Boston Celtics", "price": +135},
+                ],
+            }
+        ],
     }
 
 
 # ──────────────────────────────────────────────
 #  Player Prop Fixtures
 # ──────────────────────────────────────────────
+
 
 @pytest.fixture
 def sample_player_prop():
@@ -121,65 +133,71 @@ def sample_player_prop():
             {
                 "key": "pinnacle",
                 "title": "Pinnacle",
-                "markets": [{
-                    "key": "player_points",
-                    "outcomes": [
-                        {
-                            "name": "LeBron James - Over",
-                            "description": "LeBron James Points",
-                            "point": 25.5,
-                            "price": -115,
-                        },
-                        {
-                            "name": "LeBron James - Under",
-                            "description": "LeBron James Points",
-                            "point": 25.5,
-                            "price": -105,
-                        },
-                    ],
-                }],
+                "markets": [
+                    {
+                        "key": "player_points",
+                        "outcomes": [
+                            {
+                                "name": "LeBron James - Over",
+                                "description": "LeBron James Points",
+                                "point": 25.5,
+                                "price": -115,
+                            },
+                            {
+                                "name": "LeBron James - Under",
+                                "description": "LeBron James Points",
+                                "point": 25.5,
+                                "price": -105,
+                            },
+                        ],
+                    }
+                ],
             },
             {
                 "key": "draftkings",
                 "title": "DraftKings",
-                "markets": [{
-                    "key": "player_points",
-                    "outcomes": [
-                        {
-                            "name": "LeBron James - Over",
-                            "description": "LeBron James Points",
-                            "point": 25.5,
-                            "price": -105,
-                        },
-                        {
-                            "name": "LeBron James - Under",
-                            "description": "LeBron James Points",
-                            "point": 25.5,
-                            "price": -115,
-                        },
-                    ],
-                }],
+                "markets": [
+                    {
+                        "key": "player_points",
+                        "outcomes": [
+                            {
+                                "name": "LeBron James - Over",
+                                "description": "LeBron James Points",
+                                "point": 25.5,
+                                "price": -105,
+                            },
+                            {
+                                "name": "LeBron James - Under",
+                                "description": "LeBron James Points",
+                                "point": 25.5,
+                                "price": -115,
+                            },
+                        ],
+                    }
+                ],
             },
             {
                 "key": "fanduel",
                 "title": "FanDuel",
-                "markets": [{
-                    "key": "player_points",
-                    "outcomes": [
-                        {
-                            "name": "LeBron James - Over",
-                            "description": "LeBron James Points",
-                            "point": 25.5,
-                            "price": +100,
-                        },
-                        {
-                            "name": "LeBron James - Under",
-                            "description": "LeBron James Points",
-                            "point": 25.5,
-                            "price": -120,
-                        },
-                    ],
-                }],
+                "markets": [
+                    {
+                        "key": "player_points",
+                        "outcomes": [
+                            {
+                                "name": "LeBron James - Over",
+                                "description": "LeBron James Points",
+                                "point": 25.5,
+                                "price": +100,
+                            },
+                            {
+                                "name": "LeBron James - Under",
+                                "description": "LeBron James Points",
+                                "point": 25.5,
+                                "price": -120,
+                            },
+                        ],
+                    }
+                ],
             },
         ],
     }
@@ -188,6 +206,7 @@ def sample_player_prop():
 # ──────────────────────────────────────────────
 #  Pre-built Arbitrage Scenario
 # ──────────────────────────────────────────────
+
 
 @pytest.fixture
 def sample_arb_opportunity():
@@ -208,24 +227,28 @@ def sample_arb_opportunity():
             {
                 "key": "draftkings",
                 "title": "DraftKings",
-                "markets": [{
-                    "key": "h2h",
-                    "outcomes": [
-                        {"name": "Los Angeles Lakers", "price": +140},
-                        {"name": "Boston Celtics", "price": -200},
-                    ],
-                }],
+                "markets": [
+                    {
+                        "key": "h2h",
+                        "outcomes": [
+                            {"name": "Los Angeles Lakers", "price": +140},
+                            {"name": "Boston Celtics", "price": -200},
+                        ],
+                    }
+                ],
             },
             {
                 "key": "fanduel",
                 "title": "FanDuel",
-                "markets": [{
-                    "key": "h2h",
-                    "outcomes": [
-                        {"name": "Los Angeles Lakers", "price": -180},
-                        {"name": "Boston Celtics", "price": +120},
-                    ],
-                }],
+                "markets": [
+                    {
+                        "key": "h2h",
+                        "outcomes": [
+                            {"name": "Los Angeles Lakers", "price": -180},
+                            {"name": "Boston Celtics", "price": +120},
+                        ],
+                    }
+                ],
             },
         ],
     }
@@ -234,6 +257,7 @@ def sample_arb_opportunity():
 # ──────────────────────────────────────────────
 #  Pre-built +EV Scenario
 # ──────────────────────────────────────────────
+
 
 @pytest.fixture
 def sample_ev_opportunity():
@@ -253,24 +277,28 @@ def sample_ev_opportunity():
             {
                 "key": "pinnacle",
                 "title": "Pinnacle",
-                "markets": [{
-                    "key": "h2h",
-                    "outcomes": [
-                        {"name": "Los Angeles Lakers", "price": -155},
-                        {"name": "Boston Celtics", "price": +135},
-                    ],
-                }],
+                "markets": [
+                    {
+                        "key": "h2h",
+                        "outcomes": [
+                            {"name": "Los Angeles Lakers", "price": -155},
+                            {"name": "Boston Celtics", "price": +135},
+                        ],
+                    }
+                ],
             },
             {
                 "key": "draftkings",
                 "title": "DraftKings",
-                "markets": [{
-                    "key": "h2h",
-                    "outcomes": [
-                        {"name": "Los Angeles Lakers", "price": -170},
-                        {"name": "Boston Celtics", "price": +155},
-                    ],
-                }],
+                "markets": [
+                    {
+                        "key": "h2h",
+                        "outcomes": [
+                            {"name": "Los Angeles Lakers", "price": -170},
+                            {"name": "Boston Celtics", "price": +155},
+                        ],
+                    }
+                ],
             },
         ],
     }
@@ -279,6 +307,7 @@ def sample_ev_opportunity():
 # ──────────────────────────────────────────────
 #  Mock API Response
 # ──────────────────────────────────────────────
+
 
 @pytest.fixture
 def mock_odds_api_response(sample_moneyline_odds):
@@ -289,6 +318,7 @@ def mock_odds_api_response(sample_moneyline_odds):
 # ──────────────────────────────────────────────
 #  Kelly Criterion Inputs
 # ──────────────────────────────────────────────
+
 
 @pytest.fixture
 def sample_kelly_inputs():
@@ -311,6 +341,7 @@ def sample_kelly_inputs():
 #  Scanner Fixtures
 # ──────────────────────────────────────────────
 
+
 @pytest.fixture
 def efficient_market():
     """Efficient market: all books offer identical odds → zero edge."""
@@ -324,13 +355,15 @@ def efficient_market():
             {
                 "key": bk,
                 "title": bk.title(),
-                "markets": [{
-                    "key": "h2h",
-                    "outcomes": [
-                        {"name": "Team A", "price": -110},
-                        {"name": "Team B", "price": -110},
-                    ],
-                }],
+                "markets": [
+                    {
+                        "key": "h2h",
+                        "outcomes": [
+                            {"name": "Team A", "price": -110},
+                            {"name": "Team B", "price": -110},
+                        ],
+                    }
+                ],
             }
             for bk in ["pinnacle", "draftkings", "fanduel", "betmgm"]
         ],

@@ -39,3 +39,16 @@ logs/
 
 # Jupyter (if any)
 .ipynb_checkpoints/
+
+# Coverage / test artifacts
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.pytest_cache/
+
+# Local benchmark scratch output
+bench_out.txt
+
+# SQLite databases written at runtime
+data/*.db

@@ -13,7 +13,6 @@ from src.data_ingestion import OddsAPIClient
 from src.math_engine import MathEngine
 from src.scanner import Scanner
 
-
 # ══════════════════════════════════════════════
 #  End-to-End Pipeline Tests
 # ══════════════════════════════════════════════
@@ -115,8 +114,7 @@ class TestEndToEnd:
         if not ev_df.empty:
             for _, row in ev_df.iterrows():
                 assert row["EV_%"] > 0, (
-                    f"EV should be positive but got {row['EV_%']}% "
-                    f"for {row['Outcome']}"
+                    f"EV should be positive but got {row['EV_%']}% " f"for {row['Outcome']}"
                 )
 
     @pytest.mark.asyncio
@@ -130,9 +128,9 @@ class TestEndToEnd:
 
         if not arb_df.empty:
             for _, row in arb_df.iterrows():
-                assert row["Margin_%"] > 0, (
-                    f"Arb margin should be positive but got {row['Margin_%']}%"
-                )
+                assert (
+                    row["Margin_%"] > 0
+                ), f"Arb margin should be positive but got {row['Margin_%']}%"
 
 
 # ══════════════════════════════════════════════

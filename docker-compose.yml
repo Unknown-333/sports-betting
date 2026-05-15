@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  scanner:
+    build: .
+    container_name: ev_scanner
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+    env_file:
+      - .env
+    restart: unless-stopped

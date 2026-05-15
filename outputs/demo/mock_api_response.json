@@ -1,0 +1,342 @@
+[
+  {
+    "id": "mock_los_angeles_lakers_boston_celtics",
+    "sport_key": "basketball_nba",
+    "commence_time": "2026-05-15T06:56:01.912383+00:00",
+    "home_team": "Los Angeles Lakers",
+    "away_team": "Boston Celtics",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "title": "Draftkings",
+        "markets": [
+          {
+            "key": "h2h",
+            "outcomes": [
+              {
+                "name": "Los Angeles Lakers",
+                "price": 125
+              },
+              {
+                "name": "Boston Celtics",
+                "price": -102
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "fanduel",
+        "title": "Fanduel",
+        "markets": [
+          {
+            "key": "h2h",
+            "outcomes": [
+              {
+                "name": "Los Angeles Lakers",
+                "price": 122
+              },
+              {
+                "name": "Boston Celtics",
+                "price": -100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "betmgm",
+        "title": "Betmgm",
+        "markets": [
+          {
+            "key": "h2h",
+            "outcomes": [
+              {
+                "name": "Los Angeles Lakers",
+                "price": 100
+              },
+              {
+                "name": "Boston Celtics",
+                "price": -109
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "pinnacle",
+        "title": "Pinnacle",
+        "markets": [
+          {
+            "key": "h2h",
+            "outcomes": [
+              {
+                "name": "Los Angeles Lakers",
+                "price": 105
+              },
+              {
+                "name": "Boston Celtics",
+                "price": -106
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "mock_golden_state_warriors_milwaukee_bucks",
+    "sport_key": "basketball_nba",
+    "commence_time": "2026-05-15T06:56:01.912402+00:00",
+    "home_team": "Golden State Warriors",
+    "away_team": "Milwaukee Bucks",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "title": "Draftkings",
+        "markets": [
+          {
+            "key": "h2h",
+            "outcomes": [
+              {
+                "name": "Golden State Warriors",
+                "price": -131
+              },
+              {
+                "name": "Milwaukee Bucks",
+                "price": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "fanduel",
+        "title": "Fanduel",
+        "markets": [
+          {
+            "key": "h2h",
+            "outcomes": [
+              {
+                "name": "Golden State Warriors",
+                "price": -121
+              },
+              {
+                "name": "Milwaukee Bucks",
+                "price": 111
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "betmgm",
+        "title": "Betmgm",
+        "markets": [
+          {
+            "key": "h2h",
+            "outcomes": [
+              {
+                "name": "Golden State Warriors",
+                "price": -129
+              },
+              {
+                "name": "Milwaukee Bucks",
+                "price": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "pinnacle",
+        "title": "Pinnacle",
+        "markets": [
+          {
+            "key": "h2h",
+            "outcomes": [
+              {
+                "name": "Golden State Warriors",
+                "price": -116
+              },
+              {
+                "name": "Milwaukee Bucks",
+                "price": 104
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "mock_denver_nuggets_phoenix_suns",
+    "sport_key": "basketball_nba",
+    "commence_time": "2026-05-15T06:56:01.912409+00:00",
+    "home_team": "Denver Nuggets",
+    "away_team": "Phoenix Suns",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "title": "Draftkings",
+        "markets": [
+          {
+            "key": "h2h",
+            "outcomes": [
+              {
+                "name": "Denver Nuggets",
+                "price": -133
+              },
+              {
+                "name": "Phoenix Suns",
+                "price": 154
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "fanduel",
+        "title": "Fanduel",
+        "markets": [
+          {
+            "key": "h2h",
+            "outcomes": [
+              {
+                "name": "Denver Nuggets",
+                "price": -147
+              },
+              {
+                "name": "Phoenix Suns",
+                "price": 163
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "betmgm",
+        "title": "Betmgm",
+        "markets": [
+          {
+            "key": "h2h",
+            "outcomes": [
+              {
+                "name": "Denver Nuggets",
+                "price": -144
+              },
+              {
+                "name": "Phoenix Suns",
+                "price": 171
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "pinnacle",
+        "title": "Pinnacle",
+        "markets": [
+          {
+            "key": "h2h",
+            "outcomes": [
+              {
+                "name": "Denver Nuggets",
+                "price": -146
+              },
+              {
+                "name": "Phoenix Suns",
+                "price": 172
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "mock_dallas_mavericks_miami_heat",
+    "sport_key": "basketball_nba",
+    "commence_time": "2026-05-15T06:56:01.912417+00:00",
+    "home_team": "Dallas Mavericks",
+    "away_team": "Miami Heat",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "title": "Draftkings",
+        "markets": [
+          {
+            "key": "h2h",
+            "outcomes": [
+              {
+                "name": "Dallas Mavericks",
+                "price": -131
+              },
+              {
+                "name": "Miami Heat",
+                "price": 140
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "fanduel",
+        "title": "Fanduel",
+        "markets": [
+          {
+            "key": "h2h",
+            "outcomes": [
+              {
+                "name": "Dallas Mavericks",
+                "price": -134
+              },
+              {
+                "name": "Miami Heat",
+                "price": 150
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "betmgm",
+        "title": "Betmgm",
+        "markets": [
+          {
+            "key": "h2h",
+            "outcomes": [
+              {
+                "name": "Dallas Mavericks",
+                "price": -133
+              },
+              {
+                "name": "Miami Heat",
+                "price": 170
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "pinnacle",
+        "title": "Pinnacle",
+        "markets": [
+          {
+            "key": "h2h",
+            "outcomes": [
+              {
+                "name": "Dallas Mavericks",
+                "price": -153
+              },
+              {
+                "name": "Miami Heat",
+                "price": 159
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

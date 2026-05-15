@@ -55,9 +55,7 @@ class Scanner:
         if bankroll <= 0:
             raise ValueError(f"Bankroll must be positive, got {bankroll}")
         if not (0 < kelly_multiplier <= 1.0):
-            raise ValueError(
-                f"Kelly multiplier must be in (0, 1], got {kelly_multiplier}"
-            )
+            raise ValueError(f"Kelly multiplier must be in (0, 1], got {kelly_multiplier}")
         self.math = math or MathEngine()
         self.bankroll = bankroll
         self.kelly_multiplier = kelly_multiplier
@@ -97,9 +95,7 @@ class Scanner:
     #  1. Arbitrage Detection
     # ──────────────────────────────────────────────
 
-    def _find_best_odds(
-        self, prices: list[tuple[str, str, int]]
-    ) -> tuple[str, int, float]:
+    def _find_best_odds(self, prices: list[tuple[str, str, int]]) -> tuple[str, int, float]:
         """Find the best (highest) odds among all bookmakers.
 
         Returns (book_key, american_odds, decimal_odds).
@@ -165,29 +161,43 @@ class Scanner:
 
                 if inv_sum < 1.0:
                     margin = round((1.0 - inv_sum) * 100, 2)
+                    if margin <= 0.0:
+                        # Margin rounded to zero -> not a real arb edge.
+                        continue
                     # Calculate hedge stakes for $100 total
                     total_stake = 100.0
                     stake_a = round(total_stake * (1.0 / dec_a) / inv_sum, 2)
                     stake_b = round(total_stake - stake_a, 2)
 
-                    label = matchup if market_key == "h2h" else f"{matchup} | {side_a.split(' - ')[0]}"
+                    label = (
+                        matchup if market_key == "h2h" else f"{matchup} | {side_a.split(' - ')[0]}"
+                    )
 
-                    arbs.append({
-                        "Matchup": label,
-                        "Side_1": side_a,
-                        "Book_1": bk_a.title(),
-                        "Odds_1": am_a,
-                        "Side_2": side_b,
-                        "Book_2": bk_b.title(),
-                        "Odds_2": am_b,
-                        "Margin_%": margin,
-                        "Stake_1": f"${stake_a:.2f}",
-                        "Stake_2": f"${stake_b:.2f}",
-                    })
+                    arbs.append(
+                        {
+                            "Matchup": label,
+                            "Side_1": side_a,
+                            "Book_1": bk_a.title(),
+                            "Odds_1": am_a,
+                            "Side_2": side_b,
+                            "Book_2": bk_b.title(),
+                            "Odds_2": am_b,
+                            "Margin_%": margin,
+                            "Stake_1": f"${stake_a:.2f}",
+                            "Stake_2": f"${stake_b:.2f}",
+                        }
+                    )
 
                     logger.info(
                         "ARB FOUND: %s | %s@%s(%+d) vs %s@%s(%+d) | margin=%.2f%%",
-                        label, side_a, bk_a, am_a, side_b, bk_b, am_b, margin,
+                        label,
+                        side_a,
+                        bk_a,
+                        am_a,
+                        side_b,
+                        bk_b,
+                        am_b,
+                        margin,
                     )
 
         df = pd.DataFrame(arbs)
@@ -224,7 +234,7 @@ class Scanner:
         elif len(names) > 2:
             # Multi-way (e.g. soccer draw): pair all combos
             for i, a in enumerate(names):
-                for b in names[i + 1:]:
+                for b in names[i + 1 :]:
                     pairs.append((a, b))
 
         return pairs
@@ -233,9 +243,7 @@ class Scanner:
     #  2. +EV Detection (Sharp vs Soft)
     # ──────────────────────────────────────────────
 
-    def _get_pinnacle_prices(
-        self, event: dict[str, Any], market_key: str
-    ) -> dict[str, int]:
+    def _get_pinnacle_prices(self, event: dict[str, Any], market_key: str) -> dict[str, int]:
         """Extract Pinnacle's odds for each outcome.
 
         Returns dict[outcome_name, american_odds].
@@ -247,9 +255,7 @@ class Scanner:
             for mkt in bookmaker.get("markets", []):
                 if mkt["key"] != market_key:
                     continue
-                return {
-                    o["name"]: o["price"] for o in mkt.get("outcomes", [])
-                }
+                return {o["name"]: o["price"] for o in mkt.get("outcomes", [])}
         return {}
 
     def scan_ev(
@@ -289,22 +295,35 @@ class Scanner:
                 logger.debug("No Pinnacle data for %s -- skipping", matchup)
                 continue
 
-            # De-vig Pinnacle to get true probabilities
+            # De-vig Pinnacle to get true probabilities.
+            # For 3-way markets (e.g. soccer 1X2) we de-vig all outcomes
+            # together using the multiplicative N-way normalization;
+            # for 2-way markets we use the pairwise routine.
             pin_names = list(pin_prices.keys())
-            pairs = self._build_outcome_pairs(pin_names)
 
-            # Build true probability map from Pinnacle de-vig
             true_probs: dict[str, float] = {}
-            for side_a, side_b in pairs:
-                if side_a not in pin_prices or side_b not in pin_prices:
-                    continue
-                dec_a = self.math.american_to_decimal(pin_prices[side_a])
-                dec_b = self.math.american_to_decimal(pin_prices[side_b])
-                imp_a = self.math.decimal_to_implied_probability(dec_a)
-                imp_b = self.math.decimal_to_implied_probability(dec_b)
-                true_a, true_b = self.math.devig_probabilities(imp_a, imp_b)
-                true_probs[side_a] = true_a
-                true_probs[side_b] = true_b
+            if len(pin_names) >= 3:
+                imps = [
+                    self.math.decimal_to_implied_probability(
+                        self.math.american_to_decimal(pin_prices[n])
+                    )
+                    for n in pin_names
+                ]
+                fair = self.math.devig_multiway(*imps)
+                for name, p in zip(pin_names, fair):
+                    true_probs[name] = p
+            else:
+                pairs = self._build_outcome_pairs(pin_names)
+                for side_a, side_b in pairs:
+                    if side_a not in pin_prices or side_b not in pin_prices:
+                        continue
+                    dec_a = self.math.american_to_decimal(pin_prices[side_a])
+                    dec_b = self.math.american_to_decimal(pin_prices[side_b])
+                    imp_a = self.math.decimal_to_implied_probability(dec_a)
+                    imp_b = self.math.decimal_to_implied_probability(dec_b)
+                    true_a, true_b = self.math.devig_probabilities(imp_a, imp_b)
+                    true_probs[side_a] = true_a
+                    true_probs[side_b] = true_b
 
             # Now compare each soft book's odds to true probs
             for bookmaker in event.get("bookmakers", []):
@@ -329,29 +348,38 @@ class Scanner:
                         if ev >= ev_threshold:
                             fair_dec = self.math.true_probability_to_fair_odds(true_prob)
                             kelly_bet = self.math.kelly_bet_size(
-                                self.bankroll, true_prob,
-                                offered_dec, self.kelly_multiplier,
+                                self.bankroll,
+                                true_prob,
+                                offered_dec,
+                                self.kelly_multiplier,
                             )
 
                             label = (
-                                matchup if market_key == "h2h"
+                                matchup
+                                if market_key == "h2h"
                                 else f"{matchup} | {name.split(' - ')[0]}"
                             )
 
-                            ev_bets.append({
-                                "Matchup": label,
-                                "Outcome": name,
-                                "Bookmaker": bk_key.title(),
-                                "Offered_Odds": offered_american,
-                                "Pinnacle_Fair": f"{fair_dec:.2f}",
-                                "EV_%": round(ev * 100, 2),
-                                "Kelly_Bet": f"${kelly_bet:.2f}",
-                            })
+                            ev_bets.append(
+                                {
+                                    "Matchup": label,
+                                    "Outcome": name,
+                                    "Bookmaker": bk_key.title(),
+                                    "Offered_Odds": offered_american,
+                                    "Pinnacle_Fair": f"{fair_dec:.2f}",
+                                    "EV_%": round(ev * 100, 2),
+                                    "Kelly_Bet": f"${kelly_bet:.2f}",
+                                }
+                            )
 
                             logger.info(
                                 "+EV FOUND: %s | %s@%s(%+d) | EV=%.2f%% | Kelly=$%.2f",
-                                label, name, bk_key, offered_american,
-                                ev * 100, kelly_bet,
+                                label,
+                                name,
+                                bk_key,
+                                offered_american,
+                                ev * 100,
+                                kelly_bet,
                             )
 
         df = pd.DataFrame(ev_bets)
@@ -366,8 +394,9 @@ class Scanner:
 #  Integration test -- run via:  python -m src.scanner
 # ──────────────────────────────────────────────
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     import asyncio
+
     from src.data_ingestion import OddsAPIClient
 
     async def _test() -> None:

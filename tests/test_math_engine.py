@@ -11,7 +11,6 @@ import pytest
 
 from src.math_engine import MathEngine
 
-
 # ══════════════════════════════════════════════
 #  1. Odds Conversion (7 tests)
 # ══════════════════════════════════════════════
@@ -60,9 +59,9 @@ class TestDecimalRoundTrip:
         dec = math.american_to_decimal(american)
         imp = math.decimal_to_implied_probability(dec)
         dec_back = math.implied_probability_to_decimal(imp)
-        assert abs(dec - dec_back) < 0.01, (
-            f"Round-trip failed for {american}: {dec} → {imp} → {dec_back}"
-        )
+        assert (
+            abs(dec - dec_back) < 0.01
+        ), f"Round-trip failed for {american}: {dec} → {imp} → {dec_back}"
 
 
 class TestImpliedProbability:
@@ -99,23 +98,15 @@ class TestVigAndDevig:
 
     def test_standard_vig(self, math):
         """-110/-110 line has ~4.76% vig."""
-        imp_a = math.decimal_to_implied_probability(
-            math.american_to_decimal(-110)
-        )
-        imp_b = math.decimal_to_implied_probability(
-            math.american_to_decimal(-110)
-        )
+        imp_a = math.decimal_to_implied_probability(math.american_to_decimal(-110))
+        imp_b = math.decimal_to_implied_probability(math.american_to_decimal(-110))
         vig = math.calculate_vig(imp_a, imp_b)
         assert 0.045 < vig < 0.05, f"Expected ~4.76% vig, got {vig}"
 
     def test_devig_sums_to_one(self, math):
         """De-vigged probabilities must sum to exactly 1.0."""
-        imp_a = math.decimal_to_implied_probability(
-            math.american_to_decimal(-150)
-        )
-        imp_b = math.decimal_to_implied_probability(
-            math.american_to_decimal(+130)
-        )
+        imp_a = math.decimal_to_implied_probability(math.american_to_decimal(-150))
+        imp_b = math.decimal_to_implied_probability(math.american_to_decimal(+130))
         true_a, true_b = math.devig_probabilities(imp_a, imp_b)
         assert abs(true_a + true_b - 1.0) < 1e-6
 
@@ -131,23 +122,13 @@ class TestVigAndDevig:
     def test_pinnacle_lower_margin(self, math):
         """Pinnacle has lower vig than soft books.
         Pinnacle -155/+135 should have lower vig than DK -170/+140."""
-        pin_a = math.decimal_to_implied_probability(
-            math.american_to_decimal(-155)
-        )
-        pin_b = math.decimal_to_implied_probability(
-            math.american_to_decimal(+135)
-        )
-        dk_a = math.decimal_to_implied_probability(
-            math.american_to_decimal(-170)
-        )
-        dk_b = math.decimal_to_implied_probability(
-            math.american_to_decimal(+140)
-        )
+        pin_a = math.decimal_to_implied_probability(math.american_to_decimal(-155))
+        pin_b = math.decimal_to_implied_probability(math.american_to_decimal(+135))
+        dk_a = math.decimal_to_implied_probability(math.american_to_decimal(-170))
+        dk_b = math.decimal_to_implied_probability(math.american_to_decimal(+140))
         pin_vig = math.calculate_vig(pin_a, pin_b)
         dk_vig = math.calculate_vig(dk_a, dk_b)
-        assert pin_vig < dk_vig, (
-            f"Pinnacle vig ({pin_vig}) should be < DK vig ({dk_vig})"
-        )
+        assert pin_vig < dk_vig, f"Pinnacle vig ({pin_vig}) should be < DK vig ({dk_vig})"
 
     def test_devig_zero_prob_raises(self, math):
         """De-vig with zero probability should raise ValueError."""
@@ -199,7 +180,8 @@ class TestKellyCriterion:
         """Verify full Kelly matches the known formula result."""
         inp = sample_kelly_inputs
         frac = math.kelly_criterion(
-            inp["true_probability"], inp["decimal_odds"],
+            inp["true_probability"],
+            inp["decimal_odds"],
             kelly_multiplier=1.0,
         )
         assert abs(frac - inp["full_kelly_expected"]) < 0.001
@@ -208,11 +190,13 @@ class TestKellyCriterion:
         """Half Kelly = exactly 50% of full Kelly."""
         inp = sample_kelly_inputs
         full = math.kelly_criterion(
-            inp["true_probability"], inp["decimal_odds"],
+            inp["true_probability"],
+            inp["decimal_odds"],
             kelly_multiplier=1.0,
         )
         half = math.kelly_criterion(
-            inp["true_probability"], inp["decimal_odds"],
+            inp["true_probability"],
+            inp["decimal_odds"],
             kelly_multiplier=0.5,
         )
         assert abs(half - full * 0.5) < 0.001
@@ -221,11 +205,13 @@ class TestKellyCriterion:
         """Quarter Kelly = exactly 25% of full Kelly."""
         inp = sample_kelly_inputs
         full = math.kelly_criterion(
-            inp["true_probability"], inp["decimal_odds"],
+            inp["true_probability"],
+            inp["decimal_odds"],
             kelly_multiplier=1.0,
         )
         quarter = math.kelly_criterion(
-            inp["true_probability"], inp["decimal_odds"],
+            inp["true_probability"],
+            inp["decimal_odds"],
             kelly_multiplier=0.25,
         )
         assert abs(quarter - full * 0.25) < 0.001

@@ -13,10 +13,9 @@ import asyncio
 import pandas as pd
 import pytest
 
-from src.data_ingestion import OddsAPIClient, SUPPORTED_SPORTS, SUPPORTED_MARKETS
+from src.data_ingestion import SUPPORTED_MARKETS, SUPPORTED_SPORTS, OddsAPIClient
 from src.math_engine import MathEngine
 from src.scanner import Scanner
-
 
 # ══════════════════════════════════════════════
 #  1. Module Import Verification
@@ -28,14 +27,17 @@ class TestDashboardImports:
 
     def test_math_engine_importable(self):
         from src.math_engine import MathEngine
+
         assert MathEngine is not None
 
     def test_data_ingestion_importable(self):
         from src.data_ingestion import OddsAPIClient
+
         assert OddsAPIClient is not None
 
     def test_scanner_importable(self):
         from src.scanner import Scanner
+
         assert Scanner is not None
 
     def test_supported_sports_available(self):
@@ -105,6 +107,7 @@ class TestAsyncRunner:
 
     def test_asyncio_run_basic(self):
         """Basic asyncio.run should work for simple coroutines."""
+
         async def _simple():
             return 42
 

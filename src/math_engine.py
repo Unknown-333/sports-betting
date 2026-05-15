@@ -64,6 +64,31 @@ class MathEngine:
 
     @staticmethod
     @lru_cache(maxsize=512)
+    def decimal_to_american(decimal_odds: float) -> int:
+        """Convert Decimal odds back to American (moneyline) format.
+
+        Inverse of :meth:`american_to_decimal`. Useful for displaying
+        fair-value lines in their natural format.
+
+        Conventions
+        -----------
+        * ``decimal_odds == 2.0`` returns ``+100`` (even money convention).
+        * ``decimal_odds > 2.0`` returns positive American odds.
+        * ``1.0 < decimal_odds < 2.0`` returns negative American odds.
+
+        Raises
+        ------
+        ValueError
+            If ``decimal_odds <= 1.0`` (impossible price -- implies free money).
+        """
+        if decimal_odds <= 1.0:
+            raise ValueError(f"Decimal odds must be > 1.0, got {decimal_odds}")
+        if decimal_odds >= 2.0:
+            return int(round((decimal_odds - 1.0) * 100))
+        return int(round(-100.0 / (decimal_odds - 1.0)))
+
+    @staticmethod
+    @lru_cache(maxsize=512)
     def decimal_to_implied_probability(decimal_odds: float) -> float:
         """Convert Decimal odds to an implied probability.
 
@@ -83,9 +108,7 @@ class MathEngine:
             If *decimal_odds* ≤ 1.0 (not a valid price).
         """
         if decimal_odds <= 1.0:
-            raise ValueError(
-                f"Decimal odds must be > 1.0, got {decimal_odds}"
-            )
+            raise ValueError(f"Decimal odds must be > 1.0, got {decimal_odds}")
         return round(1.0 / decimal_odds, 6)
 
     @staticmethod
@@ -109,9 +132,7 @@ class MathEngine:
             If *probability* is not in (0, 1).
         """
         if not (0.0 < probability < 1.0):
-            raise ValueError(
-                f"Probability must be in (0, 1), got {probability}"
-            )
+            raise ValueError(f"Probability must be in (0, 1), got {probability}")
         return round(1.0 / probability, 4)
 
     # ──────────────────────────────────────────────
@@ -119,9 +140,8 @@ class MathEngine:
     # ──────────────────────────────────────────────
 
     @staticmethod
-    def calculate_vig(
-        implied_prob_a: float, implied_prob_b: float
-    ) -> float:
+    @lru_cache(maxsize=1024)
+    def calculate_vig(implied_prob_a: float, implied_prob_b: float) -> float:
         """Calculate the bookmaker's vig (overround / juice).
 
         The vig is the amount by which the sum of implied probabilities
@@ -147,9 +167,8 @@ class MathEngine:
         return round((implied_prob_a + implied_prob_b) - 1.0, 6)
 
     @staticmethod
-    def devig_probabilities(
-        implied_prob_a: float, implied_prob_b: float
-    ) -> tuple[float, float]:
+    @lru_cache(maxsize=1024)
+    def devig_probabilities(implied_prob_a: float, implied_prob_b: float) -> tuple[float, float]:
         """Remove vig via multiplicative normalization.
 
         Normalizes two implied probabilities so they sum to exactly 1.0,
@@ -183,6 +202,37 @@ class MathEngine:
         return true_a, true_b
 
     @staticmethod
+    def devig_multiway(*implied_probs: float) -> tuple[float, ...]:
+        """Multiplicative de-vig for an N-outcome market.
+
+        Generalization of :meth:`devig_probabilities` for markets with
+        more than two outcomes (e.g. soccer 1X2: home/draw/away).
+
+        Parameters
+        ----------
+        *implied_probs : float
+            Two or more raw implied probabilities (one per outcome).
+
+        Returns
+        -------
+        tuple[float, ...]
+            De-vigged probabilities summing to exactly 1.0.
+
+        Raises
+        ------
+        ValueError
+            If fewer than two probabilities are supplied or any value
+            is non-positive.
+        """
+        if len(implied_probs) < 2:
+            raise ValueError(f"Need at least 2 outcomes, got {len(implied_probs)}")
+        if any(p <= 0 for p in implied_probs):
+            raise ValueError(f"All implied probabilities must be > 0, got {implied_probs}")
+        total = sum(implied_probs)
+        return tuple(round(p / total, 6) for p in implied_probs)
+
+    @staticmethod
+    @lru_cache(maxsize=512)
     def true_probability_to_fair_odds(true_probability: float) -> float:
         """Convert a de-vigged true probability to fair decimal odds.
 
@@ -197,9 +247,7 @@ class MathEngine:
             Fair decimal odds (no vig embedded).
         """
         if not (0.0 < true_probability < 1.0):
-            raise ValueError(
-                f"True probability must be in (0, 1), got {true_probability}"
-            )
+            raise ValueError(f"True probability must be in (0, 1), got {true_probability}")
         return round(1.0 / true_probability, 4)
 
     # ──────────────────────────────────────────────
@@ -207,9 +255,8 @@ class MathEngine:
     # ──────────────────────────────────────────────
 
     @staticmethod
-    def expected_value(
-        true_probability: float, decimal_odds_offered: float
-    ) -> float:
+    @lru_cache(maxsize=1024)
+    def expected_value(true_probability: float, decimal_odds_offered: float) -> float:
         """Calculate the Expected Value percentage of a bet.
 
         Formula
@@ -237,22 +284,17 @@ class MathEngine:
         0.155  # +15.5% EV — strong edge
         """
         if not (0.0 < true_probability < 1.0):
-            raise ValueError(
-                f"True probability must be in (0, 1), got {true_probability}"
-            )
+            raise ValueError(f"True probability must be in (0, 1), got {true_probability}")
         if decimal_odds_offered <= 1.0:
-            raise ValueError(
-                f"Decimal odds must be > 1.0, got {decimal_odds_offered}"
-            )
-        return round(
-            (true_probability * decimal_odds_offered) - 1.0, 6
-        )
+            raise ValueError(f"Decimal odds must be > 1.0, got {decimal_odds_offered}")
+        return round((true_probability * decimal_odds_offered) - 1.0, 6)
 
     # ──────────────────────────────────────────────
     #  4. Kelly Criterion (Bet Sizing)
     # ──────────────────────────────────────────────
 
     @staticmethod
+    @lru_cache(maxsize=1024)
     def kelly_criterion(
         true_probability: float,
         decimal_odds: float,
@@ -293,21 +335,15 @@ class MathEngine:
         0.0375  # risk 3.75% of bankroll
         """
         if not (0.0 < true_probability < 1.0):
-            raise ValueError(
-                f"True probability must be in (0, 1), got {true_probability}"
-            )
+            raise ValueError(f"True probability must be in (0, 1), got {true_probability}")
         if decimal_odds <= 1.0:
-            raise ValueError(
-                f"Decimal odds must be > 1.0, got {decimal_odds}"
-            )
+            raise ValueError(f"Decimal odds must be > 1.0, got {decimal_odds}")
         if not (0.0 < kelly_multiplier <= 1.0):
-            raise ValueError(
-                f"Kelly multiplier must be in (0, 1], got {kelly_multiplier}"
-            )
+            raise ValueError(f"Kelly multiplier must be in (0, 1], got {kelly_multiplier}")
 
-        b = decimal_odds - 1.0          # net payout per $1
-        p = true_probability             # win probability
-        q = 1.0 - p                      # loss probability
+        b = decimal_odds - 1.0  # net payout per $1
+        p = true_probability  # win probability
+        q = 1.0 - p  # loss probability
 
         full_kelly = (p * b - q) / b
 
@@ -345,17 +381,80 @@ class MathEngine:
         float
             Dollar amount to bet, rounded to 2 decimal places.
         """
-        fraction = MathEngine.kelly_criterion(
-            true_probability, decimal_odds, kelly_multiplier
-        )
+        fraction = MathEngine.kelly_criterion(true_probability, decimal_odds, kelly_multiplier)
         return round(bankroll * fraction, 2)
+
+    # ──────────────────────────────────────────────
+    #  5. Cache Telemetry
+    # ──────────────────────────────────────────────
+
+    _CACHED_FUNCS: tuple[str, ...] = (
+        "american_to_decimal",
+        "decimal_to_american",
+        "decimal_to_implied_probability",
+        "implied_probability_to_decimal",
+        "calculate_vig",
+        "devig_probabilities",
+        "true_probability_to_fair_odds",
+        "expected_value",
+        "kelly_criterion",
+    )
+
+    @classmethod
+    def cache_stats(cls) -> dict[str, dict[str, int | float]]:
+        """Snapshot of LRU-cache hit/miss counters for every cached method.
+
+        Returns
+        -------
+        dict
+            ``{func_name: {"hits": int, "misses": int, "size": int,
+            "maxsize": int, "hit_rate": float}}``
+        """
+        out: dict[str, dict[str, int | float]] = {}
+        for name in cls._CACHED_FUNCS:
+            func = getattr(cls, name)
+            info = func.cache_info()
+            total = info.hits + info.misses
+            hit_rate = (info.hits / total) if total else 0.0
+            out[name] = {
+                "hits": info.hits,
+                "misses": info.misses,
+                "size": info.currsize,
+                "maxsize": info.maxsize or 0,
+                "hit_rate": round(hit_rate, 4),
+            }
+        return out
+
+    @classmethod
+    def report_cache_stats(cls) -> str:
+        """Pretty-printed cache report (one line per cached function).
+
+        Example
+        -------
+        ``odds_conversion cache: 847 hits / 12 misses (98.6% hit rate)``
+        """
+        lines = ["MathEngine cache report:"]
+        stats = cls.cache_stats()
+        width = max(len(n) for n in stats)
+        for name, s in stats.items():
+            lines.append(
+                f"  {name:<{width}}  {s['hits']:>6} hits / {s['misses']:>5} misses "
+                f"({s['hit_rate'] * 100:5.1f}% hit rate, size={s['size']}/{s['maxsize']})"
+            )
+        return "\n".join(lines)
+
+    @classmethod
+    def clear_caches(cls) -> None:
+        """Clear every LRU cache. Useful for benchmarks and tests."""
+        for name in cls._CACHED_FUNCS:
+            getattr(cls, name).cache_clear()
 
 
 # ══════════════════════════════════════════════════
 #  Inline Smoke Tests — run via:  python -m src.math_engine
 # ══════════════════════════════════════════════════
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     m = MathEngine()
 
     print("=" * 60)

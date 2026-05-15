@@ -19,10 +19,12 @@ import asyncio
 import logging
 import os
 import random
+import time
 from datetime import datetime, timezone
 from typing import Any
 
 import aiohttp
+from cachetools import TTLCache
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -42,8 +44,14 @@ BASE_URL = "https://api.the-odds-api.com/v4"
 
 SUPPORTED_SPORTS = {
     "basketball_nba": "Basketball - NBA",
+    "americanfootball_nfl": "Football - NFL",
+    "baseball_mlb": "Baseball - MLB",
+    "icehockey_nhl": "Hockey - NHL",
     "soccer_epl": "Soccer - EPL",
 }
+
+# Markets that contain a draw outcome (3-way) for de-vig branching.
+THREE_WAY_SPORTS = frozenset({"soccer_epl"})
 
 SUPPORTED_MARKETS = {
     "h2h": "Moneyline",
@@ -70,8 +78,7 @@ class OddsAPIClient:
 
         if self.is_mock:
             logger.warning(
-                "No ODDS_API_KEY found -- running in MOCK MODE "
-                "(synthetic data will be returned)"
+                "No ODDS_API_KEY found -- running in MOCK MODE " "(synthetic data will be returned)"
             )
         else:
             logger.info("OddsAPIClient initialized with live API key")
@@ -87,6 +94,24 @@ class OddsAPIClient:
         ("Dallas Mavericks", "Miami Heat"),
     ]
 
+    _MOCK_NFL_GAMES = [
+        ("Kansas City Chiefs", "San Francisco 49ers"),
+        ("Dallas Cowboys", "Philadelphia Eagles"),
+        ("Buffalo Bills", "Cincinnati Bengals"),
+    ]
+
+    _MOCK_MLB_GAMES = [
+        ("New York Yankees", "Los Angeles Dodgers"),
+        ("Houston Astros", "Atlanta Braves"),
+        ("Boston Red Sox", "Toronto Blue Jays"),
+    ]
+
+    _MOCK_NHL_GAMES = [
+        ("Vegas Golden Knights", "Edmonton Oilers"),
+        ("Boston Bruins", "Toronto Maple Leafs"),
+        ("Colorado Avalanche", "Dallas Stars"),
+    ]
+
     _MOCK_EPL_GAMES = [
         ("Arsenal", "Manchester City"),
         ("Liverpool", "Chelsea"),
@@ -94,16 +119,27 @@ class OddsAPIClient:
         ("Newcastle", "Aston Villa"),
     ]
 
+    _SPORT_GAME_MAP: dict[str, list[tuple[str, str]]] = {
+        "basketball_nba": _MOCK_NBA_GAMES,
+        "americanfootball_nfl": _MOCK_NFL_GAMES,
+        "baseball_mlb": _MOCK_MLB_GAMES,
+        "icehockey_nhl": _MOCK_NHL_GAMES,
+        "soccer_epl": _MOCK_EPL_GAMES,
+    }
+
     _MOCK_PLAYERS = [
-        "LeBron James", "Jayson Tatum", "Stephen Curry",
-        "Giannis Antetokounmpo", "Nikola Jokic", "Luka Doncic",
-        "Kevin Durant", "Anthony Edwards",
+        "LeBron James",
+        "Jayson Tatum",
+        "Stephen Curry",
+        "Giannis Antetokounmpo",
+        "Nikola Jokic",
+        "Luka Doncic",
+        "Kevin Durant",
+        "Anthony Edwards",
     ]
 
     @staticmethod
-    def _generate_american_odds(
-        base: int, spread: int = 15
-    ) -> int:
+    def _generate_american_odds(base: int, spread: int = 15) -> int:
         """Generate realistic American odds with slight variation."""
         offset = random.randint(-spread, spread)
         odds = base + offset
@@ -112,13 +148,13 @@ class OddsAPIClient:
             odds = -100 if odds < 0 else 100
         return odds
 
+    def _games_for_sport(self, sport: str) -> list[tuple[str, str]]:
+        return self._SPORT_GAME_MAP.get(sport, self._MOCK_NBA_GAMES)
+
     def _build_mock_h2h(self, sport: str) -> list[dict[str, Any]]:
         """Build mock Moneyline (h2h) odds for all games."""
-        games = (
-            self._MOCK_NBA_GAMES
-            if "nba" in sport
-            else self._MOCK_EPL_GAMES
-        )
+        games = self._games_for_sport(sport)
+        is_three_way = sport in THREE_WAY_SPORTS
         events = []
 
         for home, away in games:
@@ -127,6 +163,7 @@ class OddsAPIClient:
             pin_away_base = -pin_home_base + random.randint(-20, 20)
             if -100 < pin_away_base < 100:
                 pin_away_base = 100 if pin_away_base >= 0 else -100
+            pin_draw_base = random.choice([+220, +250, +280, +310])
 
             bookmakers_data = []
             for bk in BOOKMAKERS:
@@ -134,39 +171,43 @@ class OddsAPIClient:
                 spread = 5 if bk == "pinnacle" else 20
                 home_odds = self._generate_american_odds(pin_home_base, spread)
                 away_odds = self._generate_american_odds(pin_away_base, spread)
+                outcomes = [
+                    {"name": home, "price": home_odds},
+                    {"name": away, "price": away_odds},
+                ]
+                if is_three_way:
+                    draw_odds = self._generate_american_odds(pin_draw_base, spread)
+                    outcomes.insert(1, {"name": "Draw", "price": draw_odds})
 
-                bookmakers_data.append({
-                    "key": bk,
-                    "title": bk.replace("_", " ").title(),
-                    "markets": [{
-                        "key": "h2h",
-                        "outcomes": [
-                            {"name": home, "price": home_odds},
-                            {"name": away, "price": away_odds},
+                bookmakers_data.append(
+                    {
+                        "key": bk,
+                        "title": bk.replace("_", " ").title(),
+                        "markets": [
+                            {
+                                "key": "h2h",
+                                "outcomes": outcomes,
+                            }
                         ],
-                    }],
-                })
+                    }
+                )
 
-            events.append({
-                "id": f"mock_{home.lower().replace(' ', '_')}_{away.lower().replace(' ', '_')}",
-                "sport_key": sport,
-                "commence_time": datetime.now(timezone.utc).isoformat(),
-                "home_team": home,
-                "away_team": away,
-                "bookmakers": bookmakers_data,
-            })
+            events.append(
+                {
+                    "id": f"mock_{home.lower().replace(' ', '_')}_{away.lower().replace(' ', '_')}",
+                    "sport_key": sport,
+                    "commence_time": datetime.now(timezone.utc).isoformat(),
+                    "home_team": home,
+                    "away_team": away,
+                    "bookmakers": bookmakers_data,
+                }
+            )
 
         return events
 
-    def _build_mock_props(
-        self, sport: str, market: str
-    ) -> list[dict[str, Any]]:
+    def _build_mock_props(self, sport: str, market: str) -> list[dict[str, Any]]:
         """Build mock Player Prop odds (points, rebounds)."""
-        games = (
-            self._MOCK_NBA_GAMES
-            if "nba" in sport
-            else self._MOCK_EPL_GAMES
-        )
+        games = self._games_for_sport(sport)
         events = []
 
         stat_label = "Points" if "points" in market else "Rebounds"
@@ -185,38 +226,46 @@ class OddsAPIClient:
                     over_odds = self._generate_american_odds(-110, spread)
                     under_odds = self._generate_american_odds(-110, spread)
 
-                    outcomes.extend([
-                        {
-                            "name": f"{player} - Over",
-                            "description": f"{player} {stat_label}",
-                            "point": line,
-                            "price": over_odds,
-                        },
-                        {
-                            "name": f"{player} - Under",
-                            "description": f"{player} {stat_label}",
-                            "point": line,
-                            "price": under_odds,
-                        },
-                    ])
+                    outcomes.extend(
+                        [
+                            {
+                                "name": f"{player} - Over",
+                                "description": f"{player} {stat_label}",
+                                "point": line,
+                                "price": over_odds,
+                            },
+                            {
+                                "name": f"{player} - Under",
+                                "description": f"{player} {stat_label}",
+                                "point": line,
+                                "price": under_odds,
+                            },
+                        ]
+                    )
 
-                bookmakers_data.append({
-                    "key": bk,
-                    "title": bk.replace("_", " ").title(),
-                    "markets": [{
-                        "key": market,
-                        "outcomes": outcomes,
-                    }],
-                })
+                bookmakers_data.append(
+                    {
+                        "key": bk,
+                        "title": bk.replace("_", " ").title(),
+                        "markets": [
+                            {
+                                "key": market,
+                                "outcomes": outcomes,
+                            }
+                        ],
+                    }
+                )
 
-            events.append({
-                "id": f"mock_prop_{home.lower().replace(' ', '_')}",
-                "sport_key": sport,
-                "commence_time": datetime.now(timezone.utc).isoformat(),
-                "home_team": home,
-                "away_team": away,
-                "bookmakers": bookmakers_data,
-            })
+            events.append(
+                {
+                    "id": f"mock_prop_{home.lower().replace(' ', '_')}",
+                    "sport_key": sport,
+                    "commence_time": datetime.now(timezone.utc).isoformat(),
+                    "home_team": home,
+                    "away_team": away,
+                    "bookmakers": bookmakers_data,
+                }
+            )
 
         return events
 
@@ -225,8 +274,43 @@ class OddsAPIClient:
     # ──────────────────────────────────────────────
 
     _semaphore = asyncio.Semaphore(10)  # cap concurrent connections
-    _cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
     _CACHE_TTL = 30  # seconds
+    _CACHE_MAXSIZE = 500
+    # Thread-safe TTL cache.  Wrapping ``time.time`` in a lambda gives
+    # us late binding so test code that monkey-patches ``time.time``
+    # still controls cache expiry.
+    _cache: TTLCache[str, list[dict[str, Any]]] = TTLCache(
+        maxsize=_CACHE_MAXSIZE,
+        ttl=_CACHE_TTL,
+        timer=lambda: time.time(),
+    )
+    # Internal hit/miss counters for dashboard telemetry.
+    _cache_hits: int = 0
+    _cache_misses: int = 0
+    _last_fetch_ts: float = 0.0
+
+    # Retry policy for transient HTTP failures (429 / 503).
+    _RETRY_STATUSES = (429, 503)
+    _RETRY_BACKOFFS = (1.0, 2.0, 4.0)  # seconds
+
+    @classmethod
+    def cache_stats(cls) -> dict[str, Any]:
+        """Snapshot of the TTL cache for dashboard display.
+
+        Returns ``{entries, hits, misses, hit_rate, last_refresh_age_s}``.
+        """
+        total = cls._cache_hits + cls._cache_misses
+        hit_rate = (cls._cache_hits / total) if total else 0.0
+        age = time.time() - cls._last_fetch_ts if cls._last_fetch_ts else None
+        return {
+            "entries": len(cls._cache),
+            "maxsize": cls._CACHE_MAXSIZE,
+            "ttl": cls._CACHE_TTL,
+            "hits": cls._cache_hits,
+            "misses": cls._cache_misses,
+            "hit_rate": round(hit_rate, 4),
+            "last_refresh_age_s": round(age, 1) if age is not None else None,
+        }
 
     async def _fetch_live(
         self,
@@ -249,7 +333,9 @@ class OddsAPIClient:
 
         logger.info(
             "Fetching live odds: sport=%s market=%s regions=%s",
-            sport, market, regions,
+            sport,
+            market,
+            regions,
         )
 
         try:
@@ -262,28 +348,24 @@ class OddsAPIClient:
                     used = resp.headers.get("x-requests-used", "?")
                     logger.info(
                         "API response: %s | requests used=%s remaining=%s",
-                        resp.status, used, remaining,
+                        resp.status,
+                        used,
+                        remaining,
                     )
 
                     if resp.status == 401:
                         logger.error("Invalid API key -- check .env")
                         return []
                     if resp.status == 429:
-                        logger.error(
-                            "Rate limit hit -- back off and retry later"
-                        )
+                        logger.error("Rate limit hit -- back off and retry later")
                         return []
                     if resp.status != 200:
                         body = await resp.text()
-                        logger.error(
-                            "API error %s: %s", resp.status, body[:200]
-                        )
+                        logger.error("API error %s: %s", resp.status, body[:200])
                         return []
 
                     data: list[dict[str, Any]] = await resp.json()
-                    logger.info(
-                        "Received %d events for %s/%s", len(data), sport, market
-                    )
+                    logger.info("Received %d events for %s/%s", len(data), sport, market)
                     return data
 
         except asyncio.TimeoutError:
@@ -301,7 +383,12 @@ class OddsAPIClient:
         market: str,
         regions: str,
     ) -> tuple[str, list[dict[str, Any]]]:
-        """Fetch odds for a single bookmaker with 5s timeout and semaphore."""
+        """Fetch one bookmaker's odds with a 5 s wall-clock cap and retry.
+
+        Wraps the inner GET in :func:`asyncio.wait_for` so a hung book
+        cannot stall the gather.  Transient ``429`` / ``503`` responses
+        trigger an exponential back-off retry (1 s -> 2 s -> 4 s).
+        """
         url = f"{BASE_URL}/sports/{sport}/odds"
         params = {
             "apiKey": self.api_key,
@@ -310,26 +397,59 @@ class OddsAPIClient:
             "oddsFormat": "american",
             "bookmakers": book,
         }
-        try:
+
+        async def _do_request() -> tuple[int, list[dict[str, Any]]]:
             async with self._semaphore:
                 async with session.get(
-                    url, params=params,
+                    url,
+                    params=params,
                     timeout=aiohttp.ClientTimeout(total=5),
                 ) as resp:
                     if resp.status == 200:
-                        data = await resp.json()
-                        logger.info(
-                            "Book %s: %d events fetched", book, len(data)
-                        )
-                        return book, data
-                    logger.warning("Book %s returned status %s", book, resp.status)
-                    return book, []
-        except asyncio.TimeoutError:
-            logger.warning("Book %s timed out (5s limit)", book)
+                        payload = await resp.json()
+                        return 200, payload
+                    return resp.status, []
+
+        start = time.perf_counter()
+        attempts = 1 + len(self._RETRY_BACKOFFS)
+        for attempt in range(attempts):
+            try:
+                status, data = await asyncio.wait_for(_do_request(), timeout=5.0)
+            except asyncio.TimeoutError:
+                logger.warning("Book %s timed out (5s limit)", book)
+                return book, []
+            except aiohttp.ClientError as exc:
+                logger.warning("Book %s error: %s", book, exc)
+                return book, []
+
+            if status == 200:
+                elapsed_ms = (time.perf_counter() - start) * 1000.0
+                logger.info(
+                    "%s: %dms (%d events)",
+                    book.title(),
+                    int(elapsed_ms),
+                    len(data),
+                )
+                return book, data
+
+            # Retry on transient errors only.
+            if status in self._RETRY_STATUSES and attempt < len(self._RETRY_BACKOFFS):
+                delay = self._RETRY_BACKOFFS[attempt]
+                logger.warning(
+                    "Book %s status %s -- retrying in %.1fs (attempt %d/%d)",
+                    book,
+                    status,
+                    delay,
+                    attempt + 1,
+                    attempts,
+                )
+                await asyncio.sleep(delay)
+                continue
+
+            logger.warning("Book %s returned status %s -- giving up", book, status)
             return book, []
-        except aiohttp.ClientError as exc:
-            logger.warning("Book %s error: %s", book, exc)
-            return book, []
+
+        return book, []
 
     async def fetch_odds_parallel(
         self,
@@ -342,10 +462,12 @@ class OddsAPIClient:
         If one book times out, continues with partial results from
         the remaining books. Logs elapsed time for benchmarking.
         """
-        import time
         start = time.perf_counter()
 
-        async with aiohttp.ClientSession() as session:
+        # TCPConnector pool: limits total sockets, caches DNS for 5 min
+        # so repeated polls don't re-resolve the API host every refresh.
+        connector = aiohttp.TCPConnector(limit=20, ttl_dns_cache=300)
+        async with aiohttp.ClientSession(connector=connector) as session:
             tasks = [
                 self._fetch_book_with_timeout(session, bk, sport, market, regions)
                 for bk in BOOKMAKERS
@@ -362,16 +484,16 @@ class OddsAPIClient:
             for event in events:
                 eid = event.get("id", "")
                 if eid not in merged:
-                    merged[eid] = {
-                        k: v for k, v in event.items() if k != "bookmakers"
-                    }
+                    merged[eid] = {k: v for k, v in event.items() if k != "bookmakers"}
                     merged[eid]["bookmakers"] = []
                 merged[eid]["bookmakers"].extend(event.get("bookmakers", []))
 
         elapsed = time.perf_counter() - start
         logger.info(
             "Parallel fetch complete: %d events in %.2fs (%d books)",
-            len(merged), elapsed, len(BOOKMAKERS),
+            len(merged),
+            elapsed,
+            len(BOOKMAKERS),
         )
         return list(merged.values())
 
@@ -404,36 +526,31 @@ class OddsAPIClient:
         list[dict]
             List of event dicts with bookmaker odds.
         """
-        import time
-
         if self.is_mock:
-            logger.info(
-                "MOCK MODE: generating synthetic %s/%s data", sport, market
-            )
+            logger.info("MOCK MODE: generating synthetic %s/%s data", sport, market)
             if market == "h2h":
                 return self._build_mock_h2h(sport)
             return self._build_mock_props(sport, market)
 
-        # Cache check: bucket timestamp to nearest 30s
+        # Cache check: bucket timestamp to nearest TTL window.
         now = time.time()
         bucket = int(now // self._CACHE_TTL)
         cache_key = f"{sport}:{market}:{bucket}"
 
-        if cache_key in self._cache:
-            ts, data = self._cache[cache_key]
-            if now - ts < self._CACHE_TTL:
-                logger.info("CACHE HIT: %s (age=%.1fs)", cache_key, now - ts)
-                return data
+        try:
+            cached = self._cache[cache_key]
+        except KeyError:
+            cached = None
 
+        if cached is not None:
+            type(self)._cache_hits += 1
+            logger.info("CACHE HIT: %s", cache_key)
+            return cached
+
+        type(self)._cache_misses += 1
         data = await self._fetch_live(sport, market, regions)
-
-        # Store in cache
-        self._cache[cache_key] = (now, data)
-        # Evict stale entries
-        stale = [k for k, (t, _) in self._cache.items() if now - t > self._CACHE_TTL * 3]
-        for k in stale:
-            del self._cache[k]
-
+        self._cache[cache_key] = data
+        type(self)._last_fetch_ts = now
         return data
 
 
@@ -441,7 +558,7 @@ class OddsAPIClient:
 #  Quick test -- run via:  python -m src.data_ingestion
 # ──────────────────────────────────────────────
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     import json
 
     async def _test() -> None:

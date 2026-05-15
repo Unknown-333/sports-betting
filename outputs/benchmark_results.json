@@ -1,0 +1,157 @@
+{
+  "timestamp": "2026-05-15T12:18:55",
+  "scanner": {
+    "n_runs": 100,
+    "n_events_per_run": 4,
+    "latency_ms": {
+      "mean": 1.993,
+      "p50": 1.979,
+      "p95": 2.336,
+      "p99": 2.394,
+      "max": 2.714,
+      "min": 1.505
+    }
+  },
+  "math_primitives": {
+    "n_markets": 10000,
+    "scalar_ms": 24.791,
+    "vectorized_ms": 0.272,
+    "speedup_x": 91.08,
+    "scalar_cache_after_run": {
+      "american_to_decimal": {
+        "hits": 4971,
+        "misses": 5029,
+        "size": 512,
+        "maxsize": 512,
+        "hit_rate": 0.4971
+      },
+      "decimal_to_american": {
+        "hits": 0,
+        "misses": 0,
+        "size": 0,
+        "maxsize": 512,
+        "hit_rate": 0.0
+      },
+      "decimal_to_implied_probability": {
+        "hits": 5053,
+        "misses": 4947,
+        "size": 512,
+        "maxsize": 512,
+        "hit_rate": 0.5053
+      },
+      "implied_probability_to_decimal": {
+        "hits": 0,
+        "misses": 0,
+        "size": 0,
+        "maxsize": 512,
+        "hit_rate": 0.0
+      },
+      "calculate_vig": {
+        "hits": 0,
+        "misses": 0,
+        "size": 0,
+        "maxsize": 1024,
+        "hit_rate": 0.0
+      },
+      "devig_probabilities": {
+        "hits": 0,
+        "misses": 0,
+        "size": 0,
+        "maxsize": 1024,
+        "hit_rate": 0.0
+      },
+      "true_probability_to_fair_odds": {
+        "hits": 0,
+        "misses": 0,
+        "size": 0,
+        "maxsize": 512,
+        "hit_rate": 0.0
+      },
+      "expected_value": {
+        "hits": 9012,
+        "misses": 988,
+        "size": 988,
+        "maxsize": 1024,
+        "hit_rate": 0.9012
+      },
+      "kelly_criterion": {
+        "hits": 0,
+        "misses": 0,
+        "size": 0,
+        "maxsize": 1024,
+        "hit_rate": 0.0
+      }
+    }
+  },
+  "arb_matrix": {
+    "n_markets": 10000,
+    "vectorized_ms": 0.083,
+    "n_arbs_found": 9494
+  },
+  "cache_effectiveness_after_50_scans": {
+    "american_to_decimal": {
+      "hits": 1576,
+      "misses": 24,
+      "size": 24,
+      "maxsize": 512,
+      "hit_rate": 0.985
+    },
+    "decimal_to_american": {
+      "hits": 0,
+      "misses": 0,
+      "size": 0,
+      "maxsize": 512,
+      "hit_rate": 0.0
+    },
+    "decimal_to_implied_probability": {
+      "hits": 392,
+      "misses": 8,
+      "size": 8,
+      "maxsize": 512,
+      "hit_rate": 0.98
+    },
+    "implied_probability_to_decimal": {
+      "hits": 0,
+      "misses": 0,
+      "size": 0,
+      "maxsize": 512,
+      "hit_rate": 0.0
+    },
+    "calculate_vig": {
+      "hits": 0,
+      "misses": 0,
+      "size": 0,
+      "maxsize": 1024,
+      "hit_rate": 0.0
+    },
+    "devig_probabilities": {
+      "hits": 196,
+      "misses": 4,
+      "size": 4,
+      "maxsize": 1024,
+      "hit_rate": 0.98
+    },
+    "true_probability_to_fair_odds": {
+      "hits": 246,
+      "misses": 4,
+      "size": 4,
+      "maxsize": 512,
+      "hit_rate": 0.984
+    },
+    "expected_value": {
+      "hits": 1179,
+      "misses": 21,
+      "size": 21,
+      "maxsize": 1024,
+      "hit_rate": 0.9825
+    },
+    "kelly_criterion": {
+      "hits": 245,
+      "misses": 5,
+      "size": 5,
+      "maxsize": 1024,
+      "hit_rate": 0.98
+    }
+  },
+  "memory_delta_kb": 1729.4
+}
