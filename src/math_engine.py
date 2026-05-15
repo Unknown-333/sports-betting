@@ -242,3 +242,105 @@ class MathEngine:
         return round(
             (true_probability * decimal_odds_offered) - 1.0, 6
         )
+
+    # ──────────────────────────────────────────────
+    #  4. Kelly Criterion (Bet Sizing)
+    # ──────────────────────────────────────────────
+
+    @staticmethod
+    def kelly_criterion(
+        true_probability: float,
+        decimal_odds: float,
+        kelly_multiplier: float = 0.25,
+    ) -> float:
+        """Calculate optimal bet fraction via the Kelly Criterion.
+
+        Formula
+        -------
+        f* = (p × b − q) / b
+
+        where:
+            p = true win probability
+            q = 1 − p  (true loss probability)
+            b = decimal_odds − 1  (net payout on a $1 bet)
+
+        The result is then scaled by *kelly_multiplier* to reduce
+        variance in practice (Quarter Kelly = 0.25 is standard).
+
+        Parameters
+        ----------
+        true_probability : float
+            De-vigged fair win probability from sharp book.
+        decimal_odds : float
+            Decimal odds offered by the soft book.
+        kelly_multiplier : float, optional
+            Fraction of full Kelly to risk (default 0.25 = Quarter Kelly).
+
+        Returns
+        -------
+        float
+            Fraction of bankroll to wager, in [0, 1].
+            Returns 0.0 if the edge is negative (no bet).
+
+        Examples
+        --------
+        >>> MathEngine.kelly_criterion(0.55, 2.10, kelly_multiplier=0.25)
+        0.0375  # risk 3.75% of bankroll
+        """
+        if not (0.0 < true_probability < 1.0):
+            raise ValueError(
+                f"True probability must be in (0, 1), got {true_probability}"
+            )
+        if decimal_odds <= 1.0:
+            raise ValueError(
+                f"Decimal odds must be > 1.0, got {decimal_odds}"
+            )
+        if not (0.0 < kelly_multiplier <= 1.0):
+            raise ValueError(
+                f"Kelly multiplier must be in (0, 1], got {kelly_multiplier}"
+            )
+
+        b = decimal_odds - 1.0          # net payout per $1
+        p = true_probability             # win probability
+        q = 1.0 - p                      # loss probability
+
+        full_kelly = (p * b - q) / b
+
+        # Never recommend betting on a negative-edge play
+        if full_kelly <= 0:
+            return 0.0
+
+        return round(full_kelly * kelly_multiplier, 6)
+
+    @staticmethod
+    def kelly_bet_size(
+        bankroll: float,
+        true_probability: float,
+        decimal_odds: float,
+        kelly_multiplier: float = 0.25,
+    ) -> float:
+        """Calculate the dollar amount to wager.
+
+        Convenience wrapper around :meth:`kelly_criterion` that returns
+        an absolute dollar amount instead of a fraction.
+
+        Parameters
+        ----------
+        bankroll : float
+            Total available bankroll in dollars.
+        true_probability : float
+            De-vigged fair win probability.
+        decimal_odds : float
+            Decimal odds offered.
+        kelly_multiplier : float, optional
+            Fraction of full Kelly (default 0.25).
+
+        Returns
+        -------
+        float
+            Dollar amount to bet, rounded to 2 decimal places.
+        """
+        fraction = MathEngine.kelly_criterion(
+            true_probability, decimal_odds, kelly_multiplier
+        )
+        return round(bankroll * fraction, 2)
