@@ -1,4 +1,4 @@
-# 📊 Sports Betting Statistical Arbitrage & +EV Scanner
+# Sports Betting Statistical Arbitrage & +EV Scanner
 
 A production-grade market microstructure system that identifies pricing inefficiencies across fragmented sportsbook order books (DraftKings, FanDuel, BetMGM).
 
