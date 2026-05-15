@@ -93,3 +93,155 @@ if not api_key.strip():
     st.sidebar.warning("Running in **MOCK MODE** (synthetic data)")
 else:
     st.sidebar.success("Live API mode")
+
+# ──────────────────────────────────────────────
+#  Main Header
+# ──────────────────────────────────────────────
+
+st.title("Sports Betting Arbitrage & +EV Scanner")
+st.caption(
+    "Market microstructure analysis across DraftKings, FanDuel, BetMGM "
+    "| Sharp book: Pinnacle | Powered by The Odds API"
+)
+st.markdown("---")
+
+
+# ──────────────────────────────────────────────
+#  Async Runner Helper
+# ──────────────────────────────────────────────
+
+def run_async(coro):
+    """Run an async coroutine from synchronous Streamlit context."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return pool.submit(asyncio.run, coro).result()
+        return loop.run_until_complete(coro)
+    except RuntimeError:
+        return asyncio.run(coro)
+
+
+# ──────────────────────────────────────────────
+#  Scan Pipeline
+# ──────────────────────────────────────────────
+
+if scan_button:
+    with st.spinner("Fetching odds data and scanning for edges..."):
+        # Initialize modules
+        client = OddsAPIClient(api_key=api_key if api_key.strip() else None)
+        math = MathEngine()
+        scanner = Scanner(
+            math=math,
+            bankroll=bankroll,
+            kelly_multiplier=kelly_multiplier,
+        )
+
+        # Fetch odds
+        events = run_async(client.fetch_odds(sport, market))
+
+        # Scan for edges
+        arb_df = scanner.scan_arbitrage(events, market)
+        ev_df = scanner.scan_ev(events, market)
+
+    # Store results in session state
+    st.session_state["events"] = events
+    st.session_state["arb_df"] = arb_df
+    st.session_state["ev_df"] = ev_df
+    st.session_state["scanned"] = True
+
+
+# ──────────────────────────────────────────────
+#  Display Results
+# ──────────────────────────────────────────────
+
+if st.session_state.get("scanned"):
+    events = st.session_state["events"]
+    arb_df = st.session_state["arb_df"]
+    ev_df = st.session_state["ev_df"]
+
+    # ── KPI Cards ───────────────────────────────
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("Active Games", len(events))
+    with col2:
+        st.metric("Arbs Found", len(arb_df))
+    with col3:
+        st.metric("+EV Bets Found", len(ev_df))
+    with col4:
+        avg_edge = (
+            f"{ev_df['EV_%'].mean():.2f}%"
+            if not ev_df.empty
+            else "0.00%"
+        )
+        st.metric("Avg Edge", avg_edge)
+
+    st.markdown("---")
+
+    # ── Arbitrage Table ─────────────────────────
+    st.subheader("Arbitrage Opportunities")
+
+    if arb_df.empty:
+        st.info(
+            "No arbitrage opportunities found. "
+            "These are rare in efficient markets — try Player Props."
+        )
+    else:
+        st.success(
+            f"Found **{len(arb_df)} arbs** -- guaranteed profit "
+            "if executed simultaneously!"
+        )
+        st.dataframe(
+            arb_df.style.format({"Margin_%": "{:.2f}%"}).background_gradient(
+                subset=["Margin_%"], cmap="Greens"
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    st.markdown("---")
+
+    # ── +EV Bets Table ──────────────────────────
+    st.subheader("+EV Bets (Positive Expected Value)")
+
+    if ev_df.empty:
+        st.info(
+            "No +EV bets found above the 1.5% threshold. "
+            "Try scanning different sports or markets."
+        )
+    else:
+        st.success(
+            f"Found **{len(ev_df)} value bets** with edge over fair value!"
+        )
+        st.dataframe(
+            ev_df.style.format({"EV_%": "+{:.2f}%"}).background_gradient(
+                subset=["EV_%"], cmap="Greens"
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    # ── Footer info ─────────────────────────────
+    st.markdown("---")
+    st.caption(
+        f"Scan config: {SUPPORTED_SPORTS.get(sport, sport)} | "
+        f"{SUPPORTED_MARKETS.get(market, market)} | "
+        f"Bankroll: ${bankroll:,.0f} | Kelly: {kelly_multiplier}x"
+    )
+
+else:
+    # Landing state before first scan
+    st.markdown(
+        """
+        ### How to use this scanner
+
+        1. **Configure** your settings in the sidebar
+        2. Click **"Scan for Edges"** to analyze current odds
+        3. Review arbitrage opportunities and +EV bets below
+
+        > **Tip:** Leave the API key blank to use mock data for testing.
+        > Player Props markets typically have more edge than Moneylines.
+        """
+    )
