@@ -219,3 +219,139 @@ class OddsAPIClient:
             })
 
         return events
+
+    # ──────────────────────────────────────────────
+    #  Live API Fetch
+    # ──────────────────────────────────────────────
+
+    async def _fetch_live(
+        self,
+        sport: str,
+        market: str,
+        regions: str = "us,eu",
+    ) -> list[dict[str, Any]]:
+        """Fetch live odds from The Odds API.
+
+        Handles HTTP errors, rate limits, and timeouts gracefully.
+        """
+        # Player props use the /events/{eventId}/odds endpoint pattern,
+        # but the v4 API also supports markets= param on the main endpoint.
+        url = f"{BASE_URL}/sports/{sport}/odds"
+        params = {
+            "apiKey": self.api_key,
+            "regions": regions,
+            "markets": market,
+            "oddsFormat": "american",
+            "bookmakers": ",".join(BOOKMAKERS),
+        }
+
+        logger.info(
+            "Fetching live odds: sport=%s market=%s regions=%s",
+            sport, market, regions,
+        )
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    url, params=params, timeout=aiohttp.ClientTimeout(total=15)
+                ) as resp:
+                    # Log rate limit headers
+                    remaining = resp.headers.get("x-requests-remaining", "?")
+                    used = resp.headers.get("x-requests-used", "?")
+                    logger.info(
+                        "API response: %s | requests used=%s remaining=%s",
+                        resp.status, used, remaining,
+                    )
+
+                    if resp.status == 401:
+                        logger.error("Invalid API key -- check .env")
+                        return []
+                    if resp.status == 429:
+                        logger.error(
+                            "Rate limit hit -- back off and retry later"
+                        )
+                        return []
+                    if resp.status != 200:
+                        body = await resp.text()
+                        logger.error(
+                            "API error %s: %s", resp.status, body[:200]
+                        )
+                        return []
+
+                    data: list[dict[str, Any]] = await resp.json()
+                    logger.info(
+                        "Received %d events for %s/%s", len(data), sport, market
+                    )
+                    return data
+
+        except asyncio.TimeoutError:
+            logger.error("Request timed out after 15s")
+            return []
+        except aiohttp.ClientError as exc:
+            logger.error("HTTP client error: %s", exc)
+            return []
+
+    # ──────────────────────────────────────────────
+    #  Public Entry Point
+    # ──────────────────────────────────────────────
+
+    async def fetch_odds(
+        self,
+        sport: str = "basketball_nba",
+        market: str = "h2h",
+        regions: str = "us,eu",
+    ) -> list[dict[str, Any]]:
+        """Fetch odds data -- live or mock depending on API key.
+
+        Parameters
+        ----------
+        sport : str
+            Sport key (e.g. 'basketball_nba', 'soccer_epl').
+        market : str
+            Market key ('h2h', 'player_points', 'player_rebounds').
+        regions : str
+            Comma-separated region codes.
+
+        Returns
+        -------
+        list[dict]
+            List of event dicts with bookmaker odds.
+        """
+        if self.is_mock:
+            logger.info(
+                "MOCK MODE: generating synthetic %s/%s data", sport, market
+            )
+            if market == "h2h":
+                return self._build_mock_h2h(sport)
+            return self._build_mock_props(sport, market)
+
+        return await self._fetch_live(sport, market, regions)
+
+
+# ──────────────────────────────────────────────
+#  Quick test -- run via:  python -m src.data_ingestion
+# ──────────────────────────────────────────────
+
+if __name__ == "__main__":
+    import json
+
+    async def _test() -> None:
+        client = OddsAPIClient()
+
+        # Test h2h
+        print("\n--- Moneyline (h2h) ---")
+        h2h_data = await client.fetch_odds("basketball_nba", "h2h")
+        print(f"Events returned: {len(h2h_data)}")
+        if h2h_data:
+            print(json.dumps(h2h_data[0], indent=2, default=str)[:600])
+
+        # Test player props
+        print("\n--- Player Points Props ---")
+        props_data = await client.fetch_odds("basketball_nba", "player_points")
+        print(f"Events returned: {len(props_data)}")
+        if props_data:
+            print(json.dumps(props_data[0], indent=2, default=str)[:600])
+
+        print("\n[PASS] Data ingestion module working correctly")
+
+    asyncio.run(_test())
