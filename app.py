@@ -197,7 +197,7 @@ if st.session_state.get("scanned"):
             arb_df.style.format({"Margin_%": "{:.2f}%"}).background_gradient(
                 subset=["Margin_%"], cmap="Greens"
             ),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -219,7 +219,7 @@ if st.session_state.get("scanned"):
             ev_df.style.format({"EV_%": "+{:.2f}%"}).background_gradient(
                 subset=["EV_%"], cmap="Greens"
             ),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
