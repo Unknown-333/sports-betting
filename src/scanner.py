@@ -218,3 +218,168 @@ class Scanner:
                     pairs.append((a, b))
 
         return pairs
+
+    # ──────────────────────────────────────────────
+    #  2. +EV Detection (Sharp vs Soft)
+    # ──────────────────────────────────────────────
+
+    def _get_pinnacle_prices(
+        self, event: dict[str, Any], market_key: str
+    ) -> dict[str, int]:
+        """Extract Pinnacle's odds for each outcome.
+
+        Returns dict[outcome_name, american_odds].
+        Returns empty dict if Pinnacle is missing from the event.
+        """
+        for bookmaker in event.get("bookmakers", []):
+            if bookmaker["key"] != SHARP_BOOK:
+                continue
+            for mkt in bookmaker.get("markets", []):
+                if mkt["key"] != market_key:
+                    continue
+                return {
+                    o["name"]: o["price"] for o in mkt.get("outcomes", [])
+                }
+        return {}
+
+    def scan_ev(
+        self,
+        events: list[dict[str, Any]],
+        market_key: str = "h2h",
+        ev_threshold: float = EV_THRESHOLD,
+    ) -> pd.DataFrame:
+        """Scan for +EV bets by comparing soft books to Pinnacle fair odds.
+
+        Parameters
+        ----------
+        events : list[dict]
+            Raw event data from OddsAPIClient.
+        market_key : str
+            Market key to scan.
+        ev_threshold : float
+            Minimum EV% to flag a bet (default 1.5%).
+
+        Returns
+        -------
+        pd.DataFrame
+            Columns: Matchup, Outcome, Bookmaker, Offered_Odds,
+                     Pinnacle_Fair, EV_Pct, Kelly_Bet
+        """
+        ev_bets: list[dict[str, Any]] = []
+
+        for event in events:
+            matchup = f"{event['home_team']} vs {event['away_team']}"
+            pin_prices = self._get_pinnacle_prices(event, market_key)
+
+            if not pin_prices:
+                logger.debug("No Pinnacle data for %s -- skipping", matchup)
+                continue
+
+            # De-vig Pinnacle to get true probabilities
+            pin_names = list(pin_prices.keys())
+            pairs = self._build_outcome_pairs(pin_names)
+
+            # Build true probability map from Pinnacle de-vig
+            true_probs: dict[str, float] = {}
+            for side_a, side_b in pairs:
+                if side_a not in pin_prices or side_b not in pin_prices:
+                    continue
+                dec_a = self.math.american_to_decimal(pin_prices[side_a])
+                dec_b = self.math.american_to_decimal(pin_prices[side_b])
+                imp_a = self.math.decimal_to_implied_probability(dec_a)
+                imp_b = self.math.decimal_to_implied_probability(dec_b)
+                true_a, true_b = self.math.devig_probabilities(imp_a, imp_b)
+                true_probs[side_a] = true_a
+                true_probs[side_b] = true_b
+
+            # Now compare each soft book's odds to true probs
+            for bookmaker in event.get("bookmakers", []):
+                bk_key = bookmaker["key"]
+                if bk_key not in SOFT_BOOKS:
+                    continue
+
+                for mkt in bookmaker.get("markets", []):
+                    if mkt["key"] != market_key:
+                        continue
+                    for outcome in mkt.get("outcomes", []):
+                        name = outcome["name"]
+                        if name not in true_probs:
+                            continue
+
+                        offered_american = outcome["price"]
+                        offered_dec = self.math.american_to_decimal(offered_american)
+                        true_prob = true_probs[name]
+
+                        ev = self.math.expected_value(true_prob, offered_dec)
+
+                        if ev >= ev_threshold:
+                            fair_dec = self.math.true_probability_to_fair_odds(true_prob)
+                            kelly_bet = self.math.kelly_bet_size(
+                                self.bankroll, true_prob,
+                                offered_dec, self.kelly_multiplier,
+                            )
+
+                            label = (
+                                matchup if market_key == "h2h"
+                                else f"{matchup} | {name.split(' - ')[0]}"
+                            )
+
+                            ev_bets.append({
+                                "Matchup": label,
+                                "Outcome": name,
+                                "Bookmaker": bk_key.title(),
+                                "Offered_Odds": offered_american,
+                                "Pinnacle_Fair": f"{fair_dec:.2f}",
+                                "EV_%": round(ev * 100, 2),
+                                "Kelly_Bet": f"${kelly_bet:.2f}",
+                            })
+
+                            logger.info(
+                                "+EV FOUND: %s | %s@%s(%+d) | EV=%.2f%% | Kelly=$%.2f",
+                                label, name, bk_key, offered_american,
+                                ev * 100, kelly_bet,
+                            )
+
+        df = pd.DataFrame(ev_bets)
+        if df.empty:
+            logger.info("No +EV bets found in %d events", len(events))
+        else:
+            logger.info("Found %d +EV bets", len(df))
+        return df
+
+
+# ──────────────────────────────────────────────
+#  Integration test -- run via:  python -m src.scanner
+# ──────────────────────────────────────────────
+
+if __name__ == "__main__":
+    import asyncio
+    from src.data_ingestion import OddsAPIClient
+
+    async def _test() -> None:
+        client = OddsAPIClient()  # mock mode
+        scanner = Scanner(bankroll=1000, kelly_multiplier=0.25)
+
+        for market in ["h2h", "player_points"]:
+            print(f"\n{'='*60}")
+            print(f"  SCANNING: basketball_nba / {market}")
+            print(f"{'='*60}")
+
+            events = await client.fetch_odds("basketball_nba", market)
+            print(f"  Events fetched: {len(events)}")
+
+            arb_df = scanner.scan_arbitrage(events, market)
+            print(f"\n  Arbitrage opportunities: {len(arb_df)}")
+            if not arb_df.empty:
+                print(arb_df.to_string(index=False))
+
+            ev_df = scanner.scan_ev(events, market)
+            print(f"\n  +EV bets found: {len(ev_df)}")
+            if not ev_df.empty:
+                print(ev_df.to_string(index=False))
+
+        print(f"\n{'='*60}")
+        print("  SCANNER INTEGRATION TEST COMPLETE")
+        print(f"{'='*60}")
+
+    asyncio.run(_test())
