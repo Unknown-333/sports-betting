@@ -37,12 +37,14 @@ streamlit run app.py
 
 ```
 sports-betting/
+├── notebooks/
+│   └── math_engine_demo.ipynb  # Interactive formula walkthrough
 ├── src/
 │   ├── __init__.py
-│   ├── math_engine.py      # Odds math, de-vig, EV, Kelly
-│   ├── data_ingestion.py   # Async API client + mock mode
-│   └── scanner.py          # Arb detection & +EV alpha gen
-├── app.py                  # Streamlit dashboard
+│   ├── math_engine.py          # Odds math, de-vig, EV, Kelly
+│   ├── data_ingestion.py       # Async API client + mock mode
+│   └── scanner.py              # Arb detection & +EV alpha gen
+├── app.py                      # Streamlit dashboard
 ├── requirements.txt
 ├── .env.example
 └── README.md
