@@ -124,10 +124,40 @@ def run_async(coro):
 
 
 # ──────────────────────────────────────────────
-#  Scan Pipeline
+#  Auto-Refresh
 # ──────────────────────────────────────────────
 
-if scan_button:
+st.sidebar.markdown("---")
+auto_refresh = st.sidebar.checkbox("Auto-refresh", value=False)
+refresh_interval = st.sidebar.selectbox(
+    "Refresh interval",
+    options=[30, 60, 120],
+    format_func=lambda x: f"{x}s",
+    index=1,
+    disabled=not auto_refresh,
+)
+
+if auto_refresh:
+    import time as _time
+    _time.sleep(0.1)  # prevent tight loop
+    st.rerun() if (
+        _time.time() - st.session_state.get("_last_scan_ts", 0) > refresh_interval
+        and st.session_state.get("scanned")
+    ) else None
+
+
+# ──────────────────────────────────────────────
+#  Scan Pipeline (with timing)
+# ──────────────────────────────────────────────
+
+if scan_button or (
+    auto_refresh
+    and st.session_state.get("scanned")
+    and __import__("time").time() - st.session_state.get("_last_scan_ts", 0) > refresh_interval
+):
+    import time as _time
+    _t0 = _time.perf_counter()
+
     with st.spinner("Fetching odds data and scanning for edges..."):
         # Initialize modules
         client = OddsAPIClient(api_key=api_key if api_key.strip() else None)
@@ -145,11 +175,15 @@ if scan_button:
         arb_df = scanner.scan_arbitrage(events, market)
         ev_df = scanner.scan_ev(events, market)
 
+    _elapsed = _time.perf_counter() - _t0
+
     # Store results in session state
     st.session_state["events"] = events
     st.session_state["arb_df"] = arb_df
     st.session_state["ev_df"] = ev_df
     st.session_state["scanned"] = True
+    st.session_state["_last_scan_ts"] = _time.time()
+    st.session_state["_scan_elapsed"] = _elapsed
 
 
 # ──────────────────────────────────────────────
@@ -225,10 +259,12 @@ if st.session_state.get("scanned"):
 
     # ── Footer info ─────────────────────────────
     st.markdown("---")
+    _elapsed_str = f"{st.session_state.get('_scan_elapsed', 0):.2f}s"
     st.caption(
         f"Scan config: {SUPPORTED_SPORTS.get(sport, sport)} | "
         f"{SUPPORTED_MARKETS.get(market, market)} | "
-        f"Bankroll: ${bankroll:,.0f} | Kelly: {kelly_multiplier}x"
+        f"Bankroll: ${bankroll:,.0f} | Kelly: {kelly_multiplier}x | "
+        f"Scan time: {_elapsed_str}"
     )
 
 else:

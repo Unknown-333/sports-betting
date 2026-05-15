@@ -12,6 +12,8 @@ All methods are stateless and use strict type hints.
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 
 class MathEngine:
     """Stateless calculator for sports betting quantitative analysis.
@@ -27,6 +29,7 @@ class MathEngine:
     # ──────────────────────────────────────────────
 
     @staticmethod
+    @lru_cache(maxsize=512)
     def american_to_decimal(american_odds: int) -> float:
         """Convert American (moneyline) odds to Decimal format.
 
@@ -60,6 +63,7 @@ class MathEngine:
         return round((100 / abs(american_odds)) + 1, 4)
 
     @staticmethod
+    @lru_cache(maxsize=512)
     def decimal_to_implied_probability(decimal_odds: float) -> float:
         """Convert Decimal odds to an implied probability.
 
@@ -85,6 +89,7 @@ class MathEngine:
         return round(1.0 / decimal_odds, 6)
 
     @staticmethod
+    @lru_cache(maxsize=512)
     def implied_probability_to_decimal(probability: float) -> float:
         """Convert a probability back to Decimal odds.
 
