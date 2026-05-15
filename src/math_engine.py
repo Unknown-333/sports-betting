@@ -344,3 +344,95 @@ class MathEngine:
             true_probability, decimal_odds, kelly_multiplier
         )
         return round(bankroll * fraction, 2)
+
+
+# ══════════════════════════════════════════════════
+#  Inline Smoke Tests — run via:  python -m src.math_engine
+# ══════════════════════════════════════════════════
+
+if __name__ == "__main__":
+    m = MathEngine()
+
+    print("=" * 60)
+    print("  MATH ENGINE -- SMOKE TESTS")
+    print("=" * 60)
+
+    # ── 1. Odds Conversion ──────────────────────
+    print("\n[1] Odds Conversion")
+
+    dec_pos = m.american_to_decimal(+150)
+    assert dec_pos == 2.5, f"Expected 2.5, got {dec_pos}"
+    print(f"  +150 American -> {dec_pos} Decimal  [PASS]")
+
+    dec_neg = m.american_to_decimal(-200)
+    assert dec_neg == 1.5, f"Expected 1.5, got {dec_neg}"
+    print(f"  -200 American -> {dec_neg} Decimal  [PASS]")
+
+    imp = m.decimal_to_implied_probability(2.0)
+    assert imp == 0.5, f"Expected 0.5, got {imp}"
+    print(f"  2.00 Decimal  -> {imp} Implied Prob  [PASS]")
+
+    dec_back = m.implied_probability_to_decimal(0.5)
+    assert dec_back == 2.0, f"Expected 2.0, got {dec_back}"
+    print(f"  0.50 Prob      -> {dec_back} Decimal  [PASS]")
+
+    # Edge case: odds of 0
+    try:
+        m.american_to_decimal(0)
+        assert False, "Should have raised ValueError"
+    except ValueError:
+        print("  Odds=0 raises ValueError  [PASS]")
+
+    # ── 2. Vig & De-Vigging ─────────────────────
+    print("\n[2] Vig Calculation & De-Vigging")
+
+    # Standard -110/-110 line → each side ≈ 0.5238
+    imp_a = m.decimal_to_implied_probability(m.american_to_decimal(-110))
+    imp_b = m.decimal_to_implied_probability(m.american_to_decimal(-110))
+    vig = m.calculate_vig(imp_a, imp_b)
+    print(f"  -110/-110 vig: {vig:.4f} ({vig * 100:.2f}%)  [PASS]")
+    assert vig > 0, "Vig should be positive for -110/-110"
+
+    true_a, true_b = m.devig_probabilities(imp_a, imp_b)
+    assert abs(true_a + true_b - 1.0) < 1e-6, "De-vigged probs must sum to 1"
+    print(f"  De-vigged: {true_a:.4f} / {true_b:.4f} (sum={true_a + true_b:.6f})  [PASS]")
+
+    fair = m.true_probability_to_fair_odds(true_a)
+    print(f"  Fair odds for side A: {fair}  [PASS]")
+
+    # ── 3. Expected Value ───────────────────────
+    print("\n[3] Expected Value (+EV%)")
+
+    # If true prob is 55% and offered decimal is 2.10:
+    ev = m.expected_value(0.55, 2.10)
+    print(f"  EV(p=0.55, odds=2.10) = {ev:.4f} ({ev * 100:.2f}%)  [PASS]")
+    assert ev > 0, "This should be a +EV bet"
+
+    # Negative EV scenario
+    ev_neg = m.expected_value(0.40, 2.10)
+    print(f"  EV(p=0.40, odds=2.10) = {ev_neg:.4f} ({ev_neg * 100:.2f}%)  [PASS]")
+    assert ev_neg < 0, "This should be a -EV bet"
+
+    # ── 4. Kelly Criterion ──────────────────────
+    print("\n[4] Kelly Criterion")
+
+    frac = m.kelly_criterion(0.55, 2.10, kelly_multiplier=1.0)
+    print(f"  Full Kelly(p=0.55, odds=2.10):    {frac:.4f} ({frac * 100:.2f}%)  [PASS]")
+    assert frac > 0, "Positive edge should recommend a bet"
+
+    qtr = m.kelly_criterion(0.55, 2.10, kelly_multiplier=0.25)
+    print(f"  Quarter Kelly(p=0.55, odds=2.10): {qtr:.4f} ({qtr * 100:.2f}%)  [PASS]")
+    assert qtr < frac, "Quarter Kelly should be less than full"
+
+    dollar = m.kelly_bet_size(1000, 0.55, 2.10, kelly_multiplier=0.25)
+    print(f"  $1000 bankroll -> bet ${dollar}  [PASS]")
+    assert dollar > 0
+
+    # Negative edge → no bet
+    no_bet = m.kelly_criterion(0.30, 2.10, kelly_multiplier=1.0)
+    assert no_bet == 0.0, "Negative edge should return 0"
+    print(f"  Negative edge Kelly: {no_bet} (no bet)  [PASS]")
+
+    print("\n" + "=" * 60)
+    print("  ALL TESTS PASSED")
+    print("=" * 60)
