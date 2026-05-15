@@ -86,3 +86,135 @@ class Scanner:
                     outcomes[name].append((bk_key, name, price))
 
         return outcomes
+
+    # ──────────────────────────────────────────────
+    #  1. Arbitrage Detection
+    # ──────────────────────────────────────────────
+
+    def _find_best_odds(
+        self, prices: list[tuple[str, str, int]]
+    ) -> tuple[str, int, float]:
+        """Find the best (highest) odds among all bookmakers.
+
+        Returns (book_key, american_odds, decimal_odds).
+        """
+        best_book, best_american, best_decimal = "", 0, 0.0
+        for bk_key, _, american in prices:
+            dec = self.math.american_to_decimal(american)
+            if dec > best_decimal:
+                best_book = bk_key
+                best_american = american
+                best_decimal = dec
+        return best_book, best_american, best_decimal
+
+    def scan_arbitrage(
+        self,
+        events: list[dict[str, Any]],
+        market_key: str = "h2h",
+    ) -> pd.DataFrame:
+        """Scan events for cross-book arbitrage opportunities.
+
+        For each event, finds the best odds for each side across
+        all books. If the inverse sum < 1.0, it's a guaranteed arb.
+
+        Parameters
+        ----------
+        events : list[dict]
+            Raw event data from OddsAPIClient.fetch_odds().
+        market_key : str
+            Market to scan ('h2h', 'player_points', etc.).
+
+        Returns
+        -------
+        pd.DataFrame
+            Columns: Matchup, Side_1, Book_1, Odds_1, Side_2, Book_2,
+                     Odds_2, Margin_Pct, Stake_1, Stake_2
+        """
+        arbs: list[dict[str, Any]] = []
+
+        for event in events:
+            matchup = f"{event['home_team']} vs {event['away_team']}"
+            outcomes = self._extract_outcomes(event, market_key)
+            outcome_names = list(outcomes.keys())
+
+            # Arb requires exactly 2 sides for a two-way market
+            # For props, we pair Over/Under for each player
+            pairs = self._build_outcome_pairs(outcome_names)
+
+            for side_a, side_b in pairs:
+                if side_a not in outcomes or side_b not in outcomes:
+                    continue
+
+                bk_a, am_a, dec_a = self._find_best_odds(outcomes[side_a])
+                bk_b, am_b, dec_b = self._find_best_odds(outcomes[side_b])
+
+                if dec_a <= 1.0 or dec_b <= 1.0:
+                    continue
+
+                inv_sum = (1.0 / dec_a) + (1.0 / dec_b)
+
+                if inv_sum < 1.0:
+                    margin = round((1.0 - inv_sum) * 100, 2)
+                    # Calculate hedge stakes for $100 total
+                    total_stake = 100.0
+                    stake_a = round(total_stake * (1.0 / dec_a) / inv_sum, 2)
+                    stake_b = round(total_stake - stake_a, 2)
+
+                    label = matchup if market_key == "h2h" else f"{matchup} | {side_a.split(' - ')[0]}"
+
+                    arbs.append({
+                        "Matchup": label,
+                        "Side_1": side_a,
+                        "Book_1": bk_a.title(),
+                        "Odds_1": am_a,
+                        "Side_2": side_b,
+                        "Book_2": bk_b.title(),
+                        "Odds_2": am_b,
+                        "Margin_%": margin,
+                        "Stake_1": f"${stake_a:.2f}",
+                        "Stake_2": f"${stake_b:.2f}",
+                    })
+
+                    logger.info(
+                        "ARB FOUND: %s | %s@%s(%+d) vs %s@%s(%+d) | margin=%.2f%%",
+                        label, side_a, bk_a, am_a, side_b, bk_b, am_b, margin,
+                    )
+
+        df = pd.DataFrame(arbs)
+        if df.empty:
+            logger.info("No arbitrage opportunities found in %d events", len(events))
+        else:
+            logger.info("Found %d arbitrage opportunities", len(df))
+        return df
+
+    @staticmethod
+    def _build_outcome_pairs(
+        names: list[str],
+    ) -> list[tuple[str, str]]:
+        """Pair outcomes for arb checking.
+
+        For h2h: pairs all combinations (usually 2 teams).
+        For props: pairs "Player - Over" with "Player - Under".
+        """
+        pairs: list[tuple[str, str]] = []
+
+        # Check for Over/Under pattern (props)
+        overs = [n for n in names if "Over" in n]
+        unders = [n for n in names if "Under" in n]
+
+        if overs and unders:
+            for over in overs:
+                player = over.replace(" - Over", "")
+                matching_under = f"{player} - Under"
+                if matching_under in unders:
+                    pairs.append((over, matching_under))
+        elif len(names) == 2:
+            # Standard h2h: just pair the two sides
+            pairs.append((names[0], names[1]))
+        elif len(names) > 2:
+            # Multi-way (e.g. soccer draw): pair all combos
+            for i, a in enumerate(names):
+                for b in names[i + 1:]:
+                    pairs.append((a, b))
+
+        return pairs
