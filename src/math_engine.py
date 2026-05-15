@@ -196,3 +196,49 @@ class MathEngine:
                 f"True probability must be in (0, 1), got {true_probability}"
             )
         return round(1.0 / true_probability, 4)
+
+    # ──────────────────────────────────────────────
+    #  3. Expected Value (+EV %)
+    # ──────────────────────────────────────────────
+
+    @staticmethod
+    def expected_value(
+        true_probability: float, decimal_odds_offered: float
+    ) -> float:
+        """Calculate the Expected Value percentage of a bet.
+
+        Formula
+        -------
+        EV% = (true_probability × decimal_odds_offered) − 1
+
+        A positive result means the bet has an edge over the market.
+        For example, EV = 0.04 means a +4% edge.
+
+        Parameters
+        ----------
+        true_probability : float
+            De-vigged (fair) win probability from the sharp book.
+        decimal_odds_offered : float
+            Decimal odds being offered by the soft book.
+
+        Returns
+        -------
+        float
+            EV as a decimal (0.04 = +4% edge).
+
+        Examples
+        --------
+        >>> MathEngine.expected_value(0.55, 2.10)
+        0.155  # +15.5% EV — strong edge
+        """
+        if not (0.0 < true_probability < 1.0):
+            raise ValueError(
+                f"True probability must be in (0, 1), got {true_probability}"
+            )
+        if decimal_odds_offered <= 1.0:
+            raise ValueError(
+                f"Decimal odds must be > 1.0, got {decimal_odds_offered}"
+            )
+        return round(
+            (true_probability * decimal_odds_offered) - 1.0, 6
+        )
