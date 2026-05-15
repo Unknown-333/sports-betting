@@ -108,3 +108,91 @@ class MathEngine:
                 f"Probability must be in (0, 1), got {probability}"
             )
         return round(1.0 / probability, 4)
+
+    # ──────────────────────────────────────────────
+    #  2. Vig Calculation & Removal (De-Vigging)
+    # ──────────────────────────────────────────────
+
+    @staticmethod
+    def calculate_vig(
+        implied_prob_a: float, implied_prob_b: float
+    ) -> float:
+        """Calculate the bookmaker's vig (overround / juice).
+
+        The vig is the amount by which the sum of implied probabilities
+        exceeds 1.0 — i.e. the book's built-in margin.
+
+        Parameters
+        ----------
+        implied_prob_a : float
+            Implied probability of outcome A (e.g. Over).
+        implied_prob_b : float
+            Implied probability of outcome B (e.g. Under).
+
+        Returns
+        -------
+        float
+            Vig as a percentage (e.g. 0.05 = 5% overround).
+
+        Examples
+        --------
+        >>> MathEngine.calculate_vig(0.5263, 0.5263)  # -110 / -110
+        0.0526
+        """
+        return round((implied_prob_a + implied_prob_b) - 1.0, 6)
+
+    @staticmethod
+    def devig_probabilities(
+        implied_prob_a: float, implied_prob_b: float
+    ) -> tuple[float, float]:
+        """Remove vig via multiplicative normalization.
+
+        Normalizes two implied probabilities so they sum to exactly 1.0,
+        producing the "true" (fair) probability for each side.
+
+        Parameters
+        ----------
+        implied_prob_a : float
+            Raw implied probability of outcome A.
+        implied_prob_b : float
+            Raw implied probability of outcome B.
+
+        Returns
+        -------
+        tuple[float, float]
+            (true_prob_a, true_prob_b) summing to 1.0.
+
+        Raises
+        ------
+        ValueError
+            If either probability is ≤ 0.
+        """
+        if implied_prob_a <= 0 or implied_prob_b <= 0:
+            raise ValueError(
+                "Implied probabilities must be positive. "
+                f"Got a={implied_prob_a}, b={implied_prob_b}"
+            )
+        total = implied_prob_a + implied_prob_b
+        true_a = round(implied_prob_a / total, 6)
+        true_b = round(implied_prob_b / total, 6)
+        return true_a, true_b
+
+    @staticmethod
+    def true_probability_to_fair_odds(true_probability: float) -> float:
+        """Convert a de-vigged true probability to fair decimal odds.
+
+        Parameters
+        ----------
+        true_probability : float
+            Fair probability in (0, 1).
+
+        Returns
+        -------
+        float
+            Fair decimal odds (no vig embedded).
+        """
+        if not (0.0 < true_probability < 1.0):
+            raise ValueError(
+                f"True probability must be in (0, 1), got {true_probability}"
+            )
+        return round(1.0 / true_probability, 4)
