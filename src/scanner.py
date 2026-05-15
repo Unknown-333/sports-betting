@@ -52,6 +52,12 @@ class Scanner:
         bankroll: float = 1000.0,
         kelly_multiplier: float = 0.25,
     ) -> None:
+        if bankroll <= 0:
+            raise ValueError(f"Bankroll must be positive, got {bankroll}")
+        if not (0 < kelly_multiplier <= 1.0):
+            raise ValueError(
+                f"Kelly multiplier must be in (0, 1], got {kelly_multiplier}"
+            )
         self.math = math or MathEngine()
         self.bankroll = bankroll
         self.kelly_multiplier = kelly_multiplier
@@ -133,7 +139,11 @@ class Scanner:
         arbs: list[dict[str, Any]] = []
 
         for event in events:
-            matchup = f"{event['home_team']} vs {event['away_team']}"
+            try:
+                matchup = f"{event['home_team']} vs {event['away_team']}"
+            except (KeyError, TypeError) as exc:
+                logger.warning("Skipping malformed event: %s", exc)
+                continue
             outcomes = self._extract_outcomes(event, market_key)
             outcome_names = list(outcomes.keys())
 
@@ -268,7 +278,11 @@ class Scanner:
         ev_bets: list[dict[str, Any]] = []
 
         for event in events:
-            matchup = f"{event['home_team']} vs {event['away_team']}"
+            try:
+                matchup = f"{event['home_team']} vs {event['away_team']}"
+            except (KeyError, TypeError) as exc:
+                logger.warning("Skipping malformed event in EV scan: %s", exc)
+                continue
             pin_prices = self._get_pinnacle_prices(event, market_key)
 
             if not pin_prices:

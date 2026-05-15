@@ -283,3 +283,40 @@ class TestEdgeCases:
         assert len(pairs) == 2
         assert ("LeBron James - Over", "LeBron James - Under") in pairs
         assert ("Kevin Durant - Over", "Kevin Durant - Under") in pairs
+
+
+# ══════════════════════════════════════════════
+#  5. Robustness & Input Validation (5 tests)
+# ══════════════════════════════════════════════
+
+
+class TestRobustness:
+    """Input validation and graceful degradation."""
+
+    def test_negative_bankroll_raises(self):
+        with pytest.raises(ValueError, match="positive"):
+            Scanner(bankroll=-100)
+
+    def test_zero_bankroll_raises(self):
+        with pytest.raises(ValueError, match="positive"):
+            Scanner(bankroll=0)
+
+    def test_invalid_kelly_multiplier_raises(self):
+        with pytest.raises(ValueError, match="Kelly"):
+            Scanner(kelly_multiplier=1.5)
+
+    def test_malformed_event_skipped_in_arb(self):
+        """Events missing home_team/away_team should be skipped, not crash."""
+        good = _make_event("A", "B", {"pinnacle": (-110, -110)})
+        bad = {"id": "broken", "bookmakers": []}  # missing teams
+        scanner = Scanner()
+        df = scanner.scan_arbitrage([bad, good])
+        assert df is not None  # should complete without error
+
+    def test_malformed_event_skipped_in_ev(self):
+        """Malformed events in EV scan should be skipped gracefully."""
+        good = _make_event("A", "B", {"pinnacle": (-155, +135), "draftkings": (-120, +165)})
+        bad = {"id": "broken"}  # missing everything
+        scanner = Scanner()
+        df = scanner.scan_ev([bad, good])
+        assert df is not None
